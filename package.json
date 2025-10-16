@@ -1,0 +1,33 @@
+{
+  "name": "vehicle-parking-management",
+  "version": "1.0.0",
+  "description": "A simple vehicle parking management system with Node.js, Express and SQLite",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "parking",
+    "vehicle",
+    "management",
+    "nodejs",
+    "express",
+    "sqlite"
+  ],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "body-parser": "^2.2.0",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "express-fileupload": "^1.5.2",
+    "fs-extra": "^11.3.2",
+    "moment": "^2.30.1",
+    "path": "^0.12.7",
+    "sqlite3": "^5.1.7",
+    "xlsx": "^0.18.5"
+  }
+}
