@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quản lý Bãi Xe</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🚗 Hệ thống Quản lý Bãi Xe</h1>
+        </header>
+
+        <!-- Form thêm xe -->
+        <div class="form-section">
+            <h2>Thêm Xe Vào Bãi</h2>
+            <form id="vehicleForm">
+                <div class="form-group">
+                    <label for="licensePlate">Biển số xe *</label>
+                    <input type="text" id="licensePlate" name="license_plate" required>
+                </div>
+                
+                <div class="form-group">
+                    <label for="vehicleType">Loại xe</label>
+                    <select id="vehicleType" name="vehicle_type">
+                        <option value="">Chọn loại xe</option>
+                        <option value="Xe máy">Xe máy</option>
+                        <option value="Xe đạp">Xe đạp</option>
+                        <option value="Ô tô">Ô tô</option>
+                        <option value="Xe 4 chỗ">Xe 4 chỗ</option>
+                        <option value="Xe 7 chỗ">Xe 7 chỗ</option>
+                        <option value="Xe 16 chỗ">Xe 16 chỗ</option>
+                        <option value="Xe tải">Xe tải</option>
+                        <option value="Xe khách">Xe khách</option>
+                        <option value="Xe buýt">Xe buýt</option>
+                        <option value="Xe container">Xe container</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="ownerName">Tên chủ xe</label>
+                    <input type="text" id="ownerName" name="owner_name">
+                </div>
+                
+                <div class="form-group">
+                    <label for="phone">Số điện thoại</label>
+                    <input type="tel" id="phone" name="phone">
+                </div>
+                
+                <div class="form-group">
+                    <label for="price">Giá tiền (VNĐ)</label>
+                    <input type="number" id="price" name="price" min="0">
+                </div>
+                
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="monthlyParking" name="monthly_parking">
+                        <span class="checkmark"></span>
+                        Gửi xe theo tháng
+                    </label>
+                    <small class="help-text">Tick vào đây nếu xe gửi theo tháng</small>
+                </div>
+                
+                                <button type="submit" id="submitBtn" class="btn btn-primary">Thêm Xe</button>
+                <button type="button" id="cancelBtn" class="btn btn-secondary" style="display: none;">Hủy</button>
+            </form>
+        </div>
+
+        <!-- Bảng xe gửi tháng -->
+        <div class="table-section">
+            <div class="table-header">
+                <h2>📅 Xe Gửi Tháng</h2>
+                <div class="filter-section">
+                    <input type="text" id="searchMonthlyInput" placeholder="Tìm kiếm xe gửi tháng...">
+                    <select id="statusMonthlyFilter">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="IN">Trong bãi</option>
+                        <option value="OUT">Đã ra</option>
+                    </select>
+                    <div class="excel-buttons">
+                        <button class="btn btn-success" onclick="exportMonthlyToExcel()">
+                            📤 Export Excel (2 Sheets)
+                        </button>
+                        <button class="btn btn-primary" onclick="importFromExcel()">
+                            📥 Import Excel
+                        </button>
+                        <button class="btn btn-danger" onclick="clearAllData()">
+                            🗑️ Xóa hết dữ liệu (Test)
+                        </button>
+                        <input type="file" id="excelFileInput" accept=".xlsx,.xls" style="display: none;">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table id="monthlyVehicleTable">
+                    <thead>
+                        <tr>
+                            <th>STT</th>
+                            <th>Biển số</th>
+                            <th>Loại xe</th>
+                            <th>Chủ xe</th>
+                            <th>SDT</th>
+                            <th>Ngày vào</th>
+                            <th>Ngày ra</th>
+                            <th>Giá tiền</th>
+                            <th>Thanh toán</th>
+                            <th>Trạng thái</th>
+                            <th>Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="monthlyVehicleTableBody">
+                        <!-- Dữ liệu xe gửi tháng -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Bảng xe gửi theo giờ -->
+        <div class="table-section">
+            <div class="table-header">
+                <h2>⏰ Xe Gửi Theo Giờ</h2>
+                <div class="filter-section">
+                    <input type="text" id="searchHourlyInput" placeholder="Tìm kiếm xe gửi theo giờ...">
+                    <select id="statusHourlyFilter">
+                        <option value="">Tất cả trạng thái</option>
+                        <option value="IN">Trong bãi</option>
+                        <option value="OUT">Đã ra</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="table-container">
+                <table id="hourlyVehicleTable">
+                    <thead>
+                        <tr>
+                            <th>STT</th>
+                            <th>Biển số</th>
+                            <th>Loại xe</th>
+                            <th>Chủ xe</th>
+                            <th>SDT</th>
+                            <th>Ngày vào</th>
+                            <th>Ngày ra</th>
+                            <th>Giá tiền</th>
+                            <th>Trạng thái</th>
+                            <th>Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody id="hourlyVehicleTableBody">
+                        <!-- Dữ liệu xe gửi theo giờ -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal xác nhận -->
+    <div id="confirmModal" class="modal">
+        <div class="modal-content">
+            <h3>Xác nhận</h3>
+            <p id="confirmMessage"></p>
+            <div class="modal-actions">
+                <button id="confirmYes" class="btn btn-primary">Có</button>
+                <button id="confirmNo" class="btn btn-secondary">Không</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal nhập giá tiền khi xe ra -->
+    <!-- Modal xe ra bãi cho xe theo giờ -->
+    <div id="exitModal" class="modal">
+        <div class="modal-content">
+            <h3>Xe Ra Bãi</h3>
+            <div class="form-group">
+                <label for="exitPrice">Tổng tiền phải thu (VNĐ) *</label>
+                <input type="number" id="exitPrice" min="0" step="1000" required>
+            </div>
+            <div class="modal-actions">
+                <button id="exitConfirm" class="btn btn-primary">Xác nhận</button>
+                <button id="exitCancel" class="btn btn-secondary">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal thanh toán xe gửi tháng -->
+    <div id="paymentModal" class="modal">
+        <div class="modal-content">
+            <h3>💰 Thanh Toán Xe Gửi Tháng</h3>
+            <div class="monthly-payment-grid">
+                <div class="month-payment-item">
+                    <h4>Tháng 1</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month1">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount1" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date1" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 2</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month2">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount2" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date2" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 3</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month3">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount3" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date3" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 4</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month4">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount4" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date4" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 5</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month5">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount5" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date5" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 6</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month6">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount6" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date6" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 7</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month7">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount7" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date7" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 8</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month8">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount8" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date8" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 9</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month9">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount9" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date9" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 10</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month10">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount10" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date10" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 11</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month11">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount11" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date11" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+                <div class="month-payment-item">
+                    <h4>Tháng 12</h4>
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="month12">
+                        <span class="checkmark"></span>
+                        Đã thanh toán
+                    </label>
+                    <input type="number" id="amount12" class="amount-input" placeholder="Số tiền" min="0">
+                    <input type="date" id="date12" class="date-input" placeholder="Ngày thanh toán">
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button id="paymentConfirm" class="btn btn-primary">💾 Lưu thanh toán</button>
+                <button id="paymentCancel" class="btn btn-secondary">Hủy</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal xem chi tiết thanh toán (chỉ đọc) -->
+    <div id="viewPaymentModal" class="modal">
+        <div class="modal-content">
+            <h3>📋 Chi Tiết Thanh Toán</h3>
+            <div id="paymentDetails" class="monthly-payment-grid">
+                <!-- Payment details will be loaded here -->
+            </div>
+            <div class="modal-actions">
+                <button id="viewPaymentClose" class="btn btn-secondary">Đóng</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
