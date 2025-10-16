@@ -6,6 +6,10 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "build": "pkg server.js --target node18-win-x64,node18-macos-x64,node18-linux-x64 --output dist/parking-management",
+    "build-win": "pkg server.js --target node18-win-x64 --output dist/parking-management-windows.exe",
+    "build-mac": "pkg server.js --target node18-macos-x64 --output dist/parking-management-macos",
+    "build-linux": "pkg server.js --target node18-linux-x64 --output dist/parking-management-linux",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -29,5 +33,14 @@
     "path": "^0.12.7",
     "sqlite3": "^5.1.7",
     "xlsx": "^0.18.5"
+  },
+  "pkg": {
+    "assets": [
+      "public/**/*",
+      "node_modules/sqlite3/lib/binding/**/*"
+    ],
+    "scripts": [
+      "server.js"
+    ]
   }
 }
