@@ -40,6 +40,12 @@ const viewPaymentModal = document.getElementById('viewPaymentModal');
 const paymentDetails = document.getElementById('paymentDetails');
 const viewPaymentClose = document.getElementById('viewPaymentClose');
 
+// Edit vehicle modal elements
+const editVehicleModal = document.getElementById('editVehicleModal');
+const editVehicleForm = document.getElementById('editVehicleForm');
+const editVehicleSave = document.getElementById('editVehicleSave');
+const editVehicleCancel = document.getElementById('editVehicleCancel');
+
 // Removed - Import sample Excel functionality
 
 // Removed - Test import functionality
@@ -72,6 +78,10 @@ function setupEventListeners() {
     paymentCancel.addEventListener('click', hidePaymentModal);
     viewPaymentClose.addEventListener('click', hideViewPaymentModal);
     
+    // Edit modal events
+    editVehicleSave.addEventListener('click', handleEditVehicleSave);
+    editVehicleCancel.addEventListener('click', hideEditVehicleModal);
+    
     // Close modals when clicking outside
     window.addEventListener('click', function(event) {
         if (event.target === confirmModal) {
@@ -85,6 +95,9 @@ function setupEventListeners() {
         }
         if (event.target === viewPaymentModal) {
             hideViewPaymentModal();
+        }
+        if (event.target === editVehicleModal) {
+            hideEditVehicleModal();
         }
     });
 }
@@ -150,7 +163,21 @@ function renderMonthlyVehicles(vehicles) {
     console.log('renderMonthlyVehicles called with', vehicles.length, 'vehicles');
     monthlyVehicleTableBody.innerHTML = '';
     
-    if (vehicles.length === 0) {
+    // Sort vehicles: isParking first, then not parking
+    const sortedVehicles = [...vehicles].sort((a, b) => {
+        // Priority: isParking = 0, not parking = 1 (lower number = higher priority)
+        const aPriority = a.isParking ? 0 : 1;
+        const bPriority = b.isParking ? 0 : 1;
+        
+        if (aPriority !== bPriority) {
+            return aPriority - bPriority;
+        }
+        
+        // If same parking status, sort by entry date (newest first)
+        return new Date(b.entry_date) - new Date(a.entry_date);
+    });
+    
+    if (sortedVehicles.length === 0) {
         console.log('No monthly vehicles to display');
         monthlyVehicleTableBody.innerHTML = `
             <tr>
@@ -163,11 +190,11 @@ function renderMonthlyVehicles(vehicles) {
         return;
     }
     
-    // Calculate pagination
-    const totalPages = Math.ceil(vehicles.length / itemsPerPage);
+    // Calculate pagination using sorted vehicles
+    const totalPages = Math.ceil(sortedVehicles.length / itemsPerPage);
     const startIndex = (currentMonthlyPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
-    const paginatedVehicles = vehicles.slice(startIndex, endIndex);
+    const paginatedVehicles = sortedVehicles.slice(startIndex, endIndex);
     
     paginatedVehicles.forEach((vehicle, index) => {
         const row = document.createElement('tr');
@@ -187,15 +214,15 @@ function renderMonthlyVehicles(vehicles) {
                 </span>
             </td>
             <td>
-                <span class="status-badge ${vehicle.status === 'IN' ? 'status-in' : 'status-out'}">
-                    ${vehicle.status === 'IN' ? 'Trong bãi' : 'Đã ra'}
+                <span class="status-badge ${vehicle.isParking ? 'status-in' : 'status-out'}">
+                    ${vehicle.isParking ? 'Trong bãi' : 'Đã ra'}
                 </span>
             </td>
             <td>
                 <div class="action-buttons">
                     <button class="btn btn-primary" onclick="editVehicle(${vehicle.id})">Sửa</button>
                     <button class="btn btn-success" onclick="showPaymentModal(${vehicle.id})" title="Thanh toán">💰</button>
-                    ${vehicle.status === 'IN' ? 
+                    ${vehicle.isParking ? 
                         `<button class="btn btn-danger" onclick="exitVehicle(${vehicle.id})">Xe ra</button>` : 
                         `<button class="btn btn-secondary" onclick="reenterVehicle(${vehicle.id})">Vào lại</button>`
                     }
@@ -205,7 +232,7 @@ function renderMonthlyVehicles(vehicles) {
         monthlyVehicleTableBody.appendChild(row);
     });
     
-    updateMonthlyPagination(vehicles.length);
+    updateMonthlyPagination(sortedVehicles.length);
 }
 
 // Render hourly vehicles table with pagination
@@ -243,14 +270,14 @@ function renderHourlyVehicles(vehicles) {
             <td>${vehicle.exit_date ? formatDateTime(vehicle.exit_date) : '-'}</td>
             <td>${formatCurrency(vehicle.price)}</td>
             <td>
-                <span class="status-badge ${vehicle.status === 'IN' ? 'status-in' : 'status-out'}">
-                    ${vehicle.status === 'IN' ? 'Trong bãi' : 'Đã ra'}
+                <span class="status-badge ${vehicle.isParking ? 'status-in' : 'status-out'}">
+                    ${vehicle.isParking ? 'Trong bãi' : 'Đã ra'}
                 </span>
             </td>
             <td>
                 <div class="action-buttons">
                     <button class="btn btn-primary" onclick="editVehicle(${vehicle.id})">Sửa</button>
-                    ${vehicle.status === 'IN' ? 
+                    ${vehicle.isParking ? 
                         `<button class="btn btn-success" onclick="exitVehicle(${vehicle.id})">Xe ra</button>` : 
                         `<button class="btn btn-secondary" onclick="reenterVehicle(${vehicle.id})">Vào lại</button>`
                     }
@@ -272,7 +299,19 @@ function filterMonthlyVehicles(resetPage = true) {
         const isMonthly = vehicle.monthly_parking === 1;
         const matchesSearch = vehicle.license_plate.toLowerCase().includes(searchTerm) ||
                             vehicle.owner_name.toLowerCase().includes(searchTerm);
-        const matchesStatus = !statusFilterValue || vehicle.status === statusFilterValue;
+        
+        // Handle both string ('IN'/'OUT') and boolean/integer (1/0) status values
+        let vehicleStatusValue;
+        if (typeof vehicle.isParking === 'boolean') {
+            vehicleStatusValue = vehicle.isParking ? 'IN' : 'OUT';
+        } else if (typeof vehicle.isParking === 'number') {
+            vehicleStatusValue = vehicle.isParking === 1 ? 'IN' : 'OUT';
+        } else {
+            // Fallback to old status field if exists
+            vehicleStatusValue = vehicle.status || 'OUT';
+        }
+        
+        const matchesStatus = !statusFilterValue || vehicleStatusValue === statusFilterValue;
         
         return isMonthly && matchesSearch && matchesStatus;
     });
@@ -295,7 +334,19 @@ function filterHourlyVehicles(resetPage = true) {
         const isHourly = vehicle.monthly_parking !== 1;
         const matchesSearch = vehicle.license_plate.toLowerCase().includes(searchTerm) ||
                             vehicle.owner_name.toLowerCase().includes(searchTerm);
-        const matchesStatus = !statusFilterValue || vehicle.status === statusFilterValue;
+        
+        // Handle both string ('IN'/'OUT') and boolean/integer (1/0) status values
+        let vehicleStatusValue;
+        if (typeof vehicle.isParking === 'boolean') {
+            vehicleStatusValue = vehicle.isParking ? 'IN' : 'OUT';
+        } else if (typeof vehicle.isParking === 'number') {
+            vehicleStatusValue = vehicle.isParking === 1 ? 'IN' : 'OUT';
+        } else {
+            // Fallback to old status field if exists
+            vehicleStatusValue = vehicle.status || 'OUT';
+        }
+        
+        const matchesStatus = !statusFilterValue || vehicleStatusValue === statusFilterValue;
         
         return isHourly && matchesSearch && matchesStatus;
     });
@@ -350,46 +401,116 @@ async function handleFormSubmit(event) {
 
 // Edit vehicle
 async function editVehicle(id) {
+    console.log('editVehicle called with ID:', id);
+    
+    if (!editVehicleModal) {
+        console.error('editVehicleModal not found!');
+        showMessage('Lỗi: Không tìm thấy modal sửa xe!', 'error');
+        return;
+    }
+    
     try {
+        console.log('Fetching vehicle data...');
         const vehicle = await apiCall(`/api/vehicles/${id}`);
+        console.log('Vehicle data loaded:', vehicle);
         
-        // Fill form with vehicle data
-        document.getElementById('licensePlate').value = vehicle.license_plate;
-        document.getElementById('vehicleType').value = vehicle.vehicle_type;
-        document.getElementById('ownerName').value = vehicle.owner_name;
-        document.getElementById('phone').value = vehicle.phone;
-        document.getElementById('price').value = vehicle.price;
-        document.getElementById('monthlyParking').checked = vehicle.monthly_parking === 1;
+        // Fill modal form with vehicle data
+        const licensePlateField = document.getElementById('editLicensePlate');
+        const vehicleTypeField = document.getElementById('editVehicleType');
+        const ownerNameField = document.getElementById('editOwnerName');
+        const phoneField = document.getElementById('editPhone');
+        const priceField = document.getElementById('editPrice');
+        const monthlyParkingField = document.getElementById('editMonthlyParking');
         
-        // Disable price field if vehicle has exited
-        const priceField = document.getElementById('price');
-        const priceHelp = document.getElementById('priceHelp');
+        if (!licensePlateField || !vehicleTypeField || !ownerNameField || !phoneField || !priceField || !monthlyParkingField) {
+            console.error('Some edit form fields not found!');
+            showMessage('Lỗi: Không tìm thấy các trường dữ liệu!', 'error');
+            return;
+        }
         
-        if (vehicle.status === 'OUT') {
+        licensePlateField.value = vehicle.license_plate || '';
+        vehicleTypeField.value = vehicle.vehicle_type || '';
+        ownerNameField.value = vehicle.owner_name || '';
+        phoneField.value = vehicle.phone || '';
+        priceField.value = vehicle.price || 0;
+        monthlyParkingField.checked = vehicle.monthly_parking === 1;
+        
+        // Disable price field only for hourly vehicles that have exited
+        if (!vehicle.isParking && vehicle.monthly_parking !== 1) {
             priceField.disabled = true;
-            priceField.title = 'Không thể sửa giá tiền cho xe đã ra bãi';
-            priceHelp.style.display = 'block';
+            priceField.title = 'Không thể sửa giá tiền cho xe gửi giờ đã ra bãi';
         } else {
             priceField.disabled = false;
             priceField.title = '';
-            priceHelp.style.display = 'none';
+        }
+        
+        // Update modal title with vehicle info
+        const modalTitle = document.querySelector('#editVehicleModal h3');
+        if (modalTitle) {
+            modalTitle.innerHTML = `
+                ✏️ Sửa thông tin xe<br>
+                <small style="font-weight: normal; color: #666; font-size: 14px;">
+                    🚗 ${formatLicensePlate(vehicle.license_plate).replace('<br>', ' ')} | 
+                    📊 ${vehicle.isParking ? 'Trong bãi' : 'Đã ra bãi'}
+                </small>
+            `;
         }
         
         currentEditId = id;
-        cancelBtn.style.display = 'inline-block';
-        
-        // Update form title to indicate editing
-        document.querySelector('.form-section h2').textContent = 
-            `Sửa thông tin xe ${vehicle.license_plate} ${vehicle.status === 'OUT' ? '(Đã ra bãi)' : '(Trong bãi)'}`;
-        
-        // Change submit button text to "Cập nhật"
-        document.getElementById('submitBtn').textContent = 'Cập nhật';
-        
-        // Scroll to form
-        document.querySelector('.form-section').scrollIntoView({ behavior: 'smooth' });
+        console.log('Showing edit modal...');
+        editVehicleModal.style.display = 'block';
+        console.log('Edit modal displayed');
     } catch (error) {
         console.error('Failed to load vehicle for editing:', error);
+        showMessage('Không thể tải thông tin xe để sửa!', 'error');
     }
+}
+
+// Handle edit vehicle save
+async function handleEditVehicleSave() {
+    if (!currentEditId) return;
+    
+    try {
+        const vehicleData = {
+            license_plate: document.getElementById('editLicensePlate').value.trim(),
+            vehicle_type: document.getElementById('editVehicleType').value,
+            owner_name: document.getElementById('editOwnerName').value.trim(),
+            phone: document.getElementById('editPhone').value.trim(),
+            price: parseFloat(document.getElementById('editPrice').value) || 0,
+            monthly_parking: document.getElementById('editMonthlyParking').checked ? 1 : 0
+        };
+        
+        // Validate required fields (phone is optional)
+        if (!vehicleData.license_plate || !vehicleData.owner_name) {
+            showMessage('Vui lòng điền đầy đủ thông tin bắt buộc!', 'error');
+            return;
+        }
+        
+        // Validate phone number (if provided)
+        if (vehicleData.phone && !/^[0-9+\-\s()]+$/.test(vehicleData.phone)) {
+            showMessage('Số điện thoại không hợp lệ!', 'error');
+            return;
+        }
+        
+        // Update vehicle
+        await apiCall(`/api/vehicles/${currentEditId}`, 'PUT', vehicleData);
+        
+        showMessage('Cập nhật thông tin xe thành công!', 'success');
+        hideEditVehicleModal();
+        loadVehicles();
+    } catch (error) {
+        console.error('Failed to update vehicle:', error);
+        showMessage('Có lỗi xảy ra khi cập nhật thông tin xe!', 'error');
+    }
+}
+
+// Hide edit vehicle modal
+function hideEditVehicleModal() {
+    editVehicleModal.style.display = 'none';
+    currentEditId = null;
+    
+    // Reset form
+    document.getElementById('editVehicleForm').reset();
 }
 
 // Cancel edit
@@ -417,10 +538,10 @@ function exitVehicle(id) {
     const vehicle = allVehicles.find(v => v.id === id);
     if (!vehicle) return;
     
-    // For monthly parking vehicles, simply update status to OUT without price calculation
+    // For monthly parking vehicles, simply update isParking to false without price calculation
     if (vehicle.monthly_parking) {
         if (confirm('Xác nhận cho xe này ra bãi?')) {
-            updateVehicleStatus(id, 'OUT');
+            updateVehicleStatus(id, false);
         }
     } else {
         // Show regular hourly modal for price calculation
@@ -431,11 +552,11 @@ function exitVehicle(id) {
 }
 
 // Helper function to update vehicle status
-async function updateVehicleStatus(vehicleId, status) {
+async function updateVehicleStatus(vehicleId, isParking) {
     try {
         await apiCall(`/api/vehicles/${vehicleId}`, 'PUT', {
             exit_date: new Date().toISOString(),
-            status: status
+            isParking: isParking
         });
         showMessage('Cập nhật trạng thái xe thành công!', 'success');
         loadVehicles();
@@ -459,7 +580,7 @@ async function handleExitConfirm() {
         await apiCall(`/api/vehicles/${vehicleId}`, 'PUT', {
             exit_date: new Date().toISOString(),
             price: price,
-            status: 'OUT'
+            isParking: false
         });
         
         showMessage('Xe đã ra bãi thành công!', 'success');
@@ -480,20 +601,17 @@ async function reenterVehicle(id) {
         }
         
         if (vehicle.monthly_parking === 1) {
-            // Monthly vehicle: just update status
+            // Monthly vehicle: just update isParking status
             await apiCall(`/api/vehicles/${id}`, 'PUT', {
                 exit_date: null,
-                status: 'IN'
+                isParking: true
             });
         } else {
-            // Hourly vehicle: create new entry (as it was removed from main table)
-            await apiCall('/api/vehicles', 'POST', {
-                license_plate: vehicle.license_plate,
-                vehicle_type: vehicle.vehicle_type,
-                owner_name: vehicle.owner_name,
-                phone: vehicle.phone,
-                price: 0,
-                is_monthly: false
+            // Hourly vehicle: just update isParking status (no longer removed from table)
+            await apiCall(`/api/vehicles/${id}`, 'PUT', {
+                exit_date: null,
+                isParking: true,
+                price: 0
             });
         }
         
@@ -528,7 +646,7 @@ async function handleExitMonthlyConfirm() {
     try {
         const updateData = {
             exit_date: new Date().toISOString(),
-            status: 'OUT',
+            isParking: false,
             monthly_paid: isPaid
         };
         

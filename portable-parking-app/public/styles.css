@@ -11,7 +11,7 @@ body {
 }
 
 .container {
-    max-width: 1600px;
+    max-width: 1700px;
     margin: 0 auto;
     padding: 20px;
 }
@@ -89,6 +89,22 @@ header h1 {
 
 .form-group.checkbox-group {
     grid-column: 1 / -1;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 50px;
+}
+
+/* Form Row Layout for Edit Modal */
+.form-row {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 15px;
+}
+
+.form-group.half-width {
+    flex: 1;
+    margin-bottom: 0;
 }
 
 .form-group:last-child {
@@ -340,6 +356,12 @@ tbody tr:nth-child(even) {
     margin: 5% auto;
     max-height: 90vh;
     overflow-y: auto;
+}
+
+/* Edit vehicle modal */
+#editVehicleModal .modal-content {
+    max-width: 600px;
+    width: 90%;
 }
 
 .modal-content h3 {

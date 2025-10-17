@@ -32,7 +32,7 @@ db.serialize(() => {
         entry_date DATETIME NOT NULL,
         exit_date DATETIME,
         price DECIMAL(10,2) DEFAULT 0,
-        status TEXT DEFAULT 'IN',
+        isParking BOOLEAN DEFAULT 1,
         monthly_parking BOOLEAN DEFAULT 0,
         monthly_payments TEXT,
         monthly_paid BOOLEAN DEFAULT 0,
@@ -56,7 +56,59 @@ db.serialize(() => {
         created_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )`);
     
-    // Database tables are now created with all necessary columns from the start
+    // Add isParking column if it doesn't exist (migration)
+    db.run(`ALTER TABLE vehicles ADD COLUMN isParking BOOLEAN DEFAULT 1`, (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding isParking column to vehicles:', err.message);
+        } else {
+            console.log('isParking column added or already exists in vehicles table');
+        }
+    });
+    
+    // Add isParking column to vehicle_history if it doesn't exist (migration)
+    db.run(`ALTER TABLE vehicle_history ADD COLUMN isParking BOOLEAN DEFAULT 1`, (err) => {
+        if (err && !err.message.includes('duplicate column name')) {
+            console.error('Error adding isParking column to vehicle_history:', err.message);
+        } else {
+            console.log('isParking column added or already exists in vehicle_history table');
+        }
+    });
+
+    // Migrate existing data from status to isParking field (only if status column exists)
+    db.all("PRAGMA table_info(vehicles)", [], (err, columns) => {
+        if (err) {
+            console.error('Error checking table info:', err.message);
+            return;
+        }
+        
+        const hasStatusColumn = columns.some(col => col.name === 'status');
+        console.log('Vehicles table has status column:', hasStatusColumn);
+        
+        if (hasStatusColumn) {
+            db.run(`UPDATE vehicles SET isParking = CASE 
+                        WHEN status IN ('Đang gửi', 'IN') OR status IS NULL THEN 1 
+                        WHEN status IN ('OUT', 'Đã ra') THEN 0 
+                        ELSE 1 
+                    END`, (err) => {
+                if (err) {
+                    console.error('Error migrating status to isParking:', err.message);
+                } else {
+                    console.log('Successfully migrated status data to isParking');
+                    
+                    // After migration, drop the status column
+                    db.run(`ALTER TABLE vehicles DROP COLUMN status`, (dropErr) => {
+                        if (dropErr && !dropErr.message.includes('no such column')) {
+                            console.error('Error dropping status column:', dropErr.message);
+                        } else {
+                            console.log('Status column dropped successfully');
+                        }
+                    });
+                }
+            });
+        } else {
+            console.log('No status column found - migration not needed');
+        }
+    });
     
     // Create unique index for monthly parking vehicles only
     db.run(`CREATE UNIQUE INDEX IF NOT EXISTS idx_monthly_license_plate 
@@ -314,9 +366,9 @@ app.get('/api/export/all', (req, res) => {
 
 // Add a new vehicle
 app.post('/api/vehicles', (req, res) => {
-    const { license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, status, is_monthly } = req.body;
+    const { license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, is_monthly } = req.body;
     
-    console.log('API POST /api/vehicles - Attempting to add vehicle:', { license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, status, is_monthly });
+    console.log('API POST /api/vehicles - Attempting to add vehicle:', { license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, is_monthly });
     
     if (!license_plate) {
         console.log('API POST /api/vehicles - Missing license plate');
@@ -329,11 +381,11 @@ app.post('/api/vehicles', (req, res) => {
     const finalPhone = phone || '';
     const finalPrice = price || 0;
     const finalEntryDate = entry_date || new Date().toISOString();
-    const finalStatus = status || 'Đang gửi';
+    const finalIsParking = isParking !== undefined ? (isParking ? 1 : 0) : 1; // Default to parking (1)
 
     // Check if vehicle already exists for non-monthly parking
     if (!is_monthly) {
-        db.get('SELECT * FROM vehicles WHERE license_plate = ? AND status = "Đang gửi"', [license_plate], (err, row) => {
+        db.get('SELECT * FROM vehicles WHERE license_plate = ? AND isParking = 1', [license_plate], (err, row) => {
             if (err) {
                 console.error('API POST /api/vehicles - Error checking existing vehicle:', err.message);
                 return res.status(500).json({ error: err.message });
@@ -352,9 +404,9 @@ app.post('/api/vehicles', (req, res) => {
     }
 
     function insertVehicle() {
-        db.run(`INSERT INTO vehicles (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, status, monthly_parking) 
+        db.run(`INSERT INTO vehicles (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, monthly_parking) 
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-            [license_plate, finalVehicleType, finalOwnerName, finalPhone, finalEntryDate, exit_date, finalPrice, finalStatus, is_monthly ? 1 : 0],
+            [license_plate, finalVehicleType, finalOwnerName, finalPhone, finalEntryDate, exit_date, finalPrice, finalIsParking, is_monthly ? 1 : 0],
             function(err) {
                 if (err) {
                     console.error('API POST /api/vehicles - Error inserting vehicle:', err.message);
@@ -363,9 +415,9 @@ app.post('/api/vehicles', (req, res) => {
                 }
 
                 // Add to history
-                db.run(`INSERT INTO vehicle_history (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, status, monthly_parking) 
+                db.run(`INSERT INTO vehicle_history (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, monthly_parking) 
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                    [license_plate, finalVehicleType, finalOwnerName, finalPhone, finalEntryDate, exit_date, finalPrice, finalStatus, is_monthly ? 1 : 0],
+                    [license_plate, finalVehicleType, finalOwnerName, finalPhone, finalEntryDate, exit_date, finalPrice, finalIsParking, is_monthly ? 1 : 0],
                     function(historyErr) {
                         if (historyErr) {
                             console.error('API POST /api/vehicles - Error adding to history:', historyErr.message);
@@ -553,7 +605,7 @@ app.post('/api/import-excel', (req, res) => {
 
                     // Insert vehicle
                     db.run(`INSERT OR REPLACE INTO vehicles 
-                            (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, status, monthly_parking, monthly_payments, monthly_paid, payment_date) 
+                            (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, monthly_parking, monthly_payments, monthly_paid, payment_date) 
                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                         [
                             licensePlate,
@@ -563,7 +615,7 @@ app.post('/api/import-excel', (req, res) => {
                             new Date().toISOString(),
                             null,
                             price,
-                            'Đang gửi',
+                            1, // isParking = true (currently parking)
                             isMonthly ? 1 : 0,
                             isMonthly ? JSON.stringify(monthlyPayments) : null,
                             isMonthly ? (Object.keys(monthlyPayments).length > 0 ? 1 : 0) : 0,
@@ -691,10 +743,10 @@ app.delete('/api/clear-all-data', (req, res) => {
 // Update vehicle (mainly for exit)
 app.put('/api/vehicles/:id', (req, res) => {
     const { id } = req.params;
-    const { exit_date, price, status, monthly_parking, license_plate, vehicle_type, owner_name, phone, monthly_paid, payment_date, monthly_payments } = req.body;
+    const { exit_date, price, isParking, monthly_parking, license_plate, vehicle_type, owner_name, phone, monthly_paid, payment_date, monthly_payments } = req.body;
     
-    // First, check the current status of the vehicle
-    db.get('SELECT status FROM vehicles WHERE id = ?', [id], (err, vehicle) => {
+    // First, get vehicle info to check current status and type
+    db.get('SELECT isParking, monthly_parking FROM vehicles WHERE id = ?', [id], (err, vehicle) => {
         if (err) {
             res.status(500).json({ error: err.message });
             return;
@@ -716,19 +768,19 @@ app.put('/api/vehicles/:id', (req, res) => {
             updateParams.push(exit_date);
         }
         
-        // Don't allow price update if vehicle has already exited (unless it's for exit process)
+        // Allow price updates for monthly parking vehicles always, restrict for hourly vehicles that have exited
         if (price !== undefined) {
-            if (vehicle.status === 'OUT' && status !== 'OUT' && exit_date === undefined) {
-                res.status(400).json({ error: 'Không thể sửa giá tiền cho xe đã ra bãi' });
+            if ((vehicle.isParking === false || vehicle.isParking === 0) && (isParking !== false && isParking !== 0) && exit_date === undefined && vehicle.monthly_parking !== 1) {
+                res.status(400).json({ error: 'Không thể sửa giá tiền cho xe gửi giờ đã ra bãi' });
                 return;
             }
             updateFields.push('price = ?');
             updateParams.push(price);
         }
         
-        if (status !== undefined) {
-            updateFields.push('status = ?');
-            updateParams.push(status);
+        if (isParking !== undefined) {
+            updateFields.push('isParking = ?');
+            updateParams.push(isParking ? 1 : 0);
         }
         
         if (monthly_parking !== undefined) {
@@ -789,8 +841,8 @@ app.put('/api/vehicles/:id', (req, res) => {
                 return;
             }
             
-            // If vehicle is exiting (status = 'OUT'), save to history and handle accordingly
-            if (status === 'OUT' && exit_date) {
+            // If vehicle is exiting (isParking = false/0), save to history and handle accordingly
+            if ((isParking === false || isParking === 0) && exit_date) {
                 // Get the updated vehicle data
                 db.get('SELECT * FROM vehicles WHERE id = ?', [id], (err, vehicleData) => {
                     if (err) {
@@ -802,24 +854,18 @@ app.put('/api/vehicles/:id', (req, res) => {
                     if (vehicleData) {
                         // Update history record with exit information
                         db.run(`UPDATE vehicle_history 
-                               SET exit_date = ?, price = ? 
+                               SET exit_date = ?, price = ?, isParking = ? 
                                WHERE license_plate = ? AND exit_date IS NULL 
                                ORDER BY created_at DESC LIMIT 1`, 
-                               [exit_date, vehicleData.price, vehicleData.license_plate], 
+                               [exit_date, vehicleData.price, 0, vehicleData.license_plate], 
                                (err) => {
                                    if (err) {
                                        console.error('Error updating history:', err.message);
                                    }
                                });
                         
-                        // For hourly vehicles, remove from main table after exit
-                        if (!vehicleData.monthly_parking) {
-                            db.run('DELETE FROM vehicles WHERE id = ?', [id], (err) => {
-                                if (err) {
-                                    console.error('Error removing hourly vehicle:', err.message);
-                                }
-                            });
-                        }
+                        // Keep all vehicles in the database for history and re-entry purposes
+                        // No longer delete hourly vehicles after exit
                     }
                     
                     res.json({ message: 'Vehicle updated successfully' });

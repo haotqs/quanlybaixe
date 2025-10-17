@@ -330,6 +330,58 @@
         </div>
     </div>
 
+    <!-- Modal sửa thông tin xe -->
+    <div id="editVehicleModal" class="modal">
+        <div class="modal-content">
+            <h3>✏️ Sửa Thông Tin Xe</h3>
+            <form id="editVehicleForm">
+                <!-- Row 1: Biển số và Loại xe -->
+                <div class="form-row">
+                    <div class="form-group half-width">
+                        <label for="editLicensePlate">Biển số xe *</label>
+                        <input type="text" id="editLicensePlate" name="license_plate" required>
+                    </div>
+                    <div class="form-group half-width">
+                        <label for="editVehicleType">Loại xe</label>
+                        <input type="text" id="editVehicleType" name="vehicle_type">
+                    </div>
+                </div>
+                
+                <!-- Row 2: Tên chủ xe và SDT -->
+                <div class="form-row">
+                    <div class="form-group half-width">
+                        <label for="editOwnerName">Tên chủ xe *</label>
+                        <input type="text" id="editOwnerName" name="owner_name" required>
+                    </div>
+                    <div class="form-group half-width">
+                        <label for="editPhone">Số điện thoại</label>
+                        <input type="tel" id="editPhone" name="phone">
+                    </div>
+                </div>
+                
+                <!-- Row 3: Giá tiền và Checkbox -->
+                <div class="form-row">
+                    <div class="form-group half-width">
+                        <label for="editPrice">Giá tiền (VNĐ)</label>
+                        <input type="number" id="editPrice" name="price" min="0">
+                    </div>
+                    <div class="form-group half-width checkbox-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="editMonthlyParking" name="monthly_parking">
+                            <span class="checkmark"></span>
+                            Gửi xe theo tháng
+                        </label>
+                    </div>
+                </div>
+            </form>
+            
+            <div class="modal-actions">
+                <button id="editVehicleSave" class="btn btn-primary">💾 Lưu thay đổi</button>
+                <button id="editVehicleCancel" class="btn btn-secondary">Hủy</button>
+            </div>
+        </div>
+    </div>
+
     <script src="script.js"></script>
 </body>
 </html>
