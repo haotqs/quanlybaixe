@@ -2,6 +2,15 @@
 let currentEditId = null;
 let allVehicles = [];
 
+// Pagination variables
+let currentMonthlyPage = 1;
+let currentHourlyPage = 1;
+const itemsPerPage = 10;
+
+// Filtered data cache
+let filteredMonthlyVehicles = [];
+let filteredHourlyVehicles = [];
+
 // DOM elements
 const vehicleForm = document.getElementById('vehicleForm');
 const monthlyVehicleTableBody = document.getElementById('monthlyVehicleTableBody');
@@ -136,7 +145,7 @@ function renderAllVehicles() {
     renderHourlyVehicles(hourlyVehicles);
 }
 
-// Render monthly vehicles table
+// Render monthly vehicles table with pagination
 function renderMonthlyVehicles(vehicles) {
     console.log('renderMonthlyVehicles called with', vehicles.length, 'vehicles');
     monthlyVehicleTableBody.innerHTML = '';
@@ -145,18 +154,26 @@ function renderMonthlyVehicles(vehicles) {
         console.log('No monthly vehicles to display');
         monthlyVehicleTableBody.innerHTML = `
             <tr>
-                <td colspan="10" style="text-align: center; padding: 40px; color: #666;">
+                <td colspan="11" style="text-align: center; padding: 40px; color: #666;">
                     Chưa có xe gửi tháng nào
                 </td>
             </tr>
         `;
+        updateMonthlyPagination(0);
         return;
     }
     
-    vehicles.forEach((vehicle, index) => {
+    // Calculate pagination
+    const totalPages = Math.ceil(vehicles.length / itemsPerPage);
+    const startIndex = (currentMonthlyPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedVehicles = vehicles.slice(startIndex, endIndex);
+    
+    paginatedVehicles.forEach((vehicle, index) => {
         const row = document.createElement('tr');
+        const globalIndex = startIndex + index + 1; // Global index across all pages
         row.innerHTML = `
-            <td>${index + 1}</td>
+            <td>${globalIndex}</td>
             <td><strong>${formatLicensePlate(vehicle.license_plate)}</strong></td>
             <td>${vehicle.vehicle_type}</td>
             <td>${vehicle.owner_name}</td>
@@ -187,9 +204,11 @@ function renderMonthlyVehicles(vehicles) {
         `;
         monthlyVehicleTableBody.appendChild(row);
     });
+    
+    updateMonthlyPagination(vehicles.length);
 }
 
-// Render hourly vehicles table
+// Render hourly vehicles table with pagination
 function renderHourlyVehicles(vehicles) {
     hourlyVehicleTableBody.innerHTML = '';
     
@@ -201,13 +220,21 @@ function renderHourlyVehicles(vehicles) {
                 </td>
             </tr>
         `;
+        updateHourlyPagination(0);
         return;
     }
     
-    vehicles.forEach((vehicle, index) => {
+    // Calculate pagination
+    const totalPages = Math.ceil(vehicles.length / itemsPerPage);
+    const startIndex = (currentHourlyPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    const paginatedVehicles = vehicles.slice(startIndex, endIndex);
+    
+    paginatedVehicles.forEach((vehicle, index) => {
         const row = document.createElement('tr');
+        const globalIndex = startIndex + index + 1; // Global index across all pages
         row.innerHTML = `
-            <td>${index + 1}</td>
+            <td>${globalIndex}</td>
             <td><strong>${formatLicensePlate(vehicle.license_plate)}</strong></td>
             <td>${vehicle.vehicle_type}</td>
             <td>${vehicle.owner_name}</td>
@@ -232,14 +259,16 @@ function renderHourlyVehicles(vehicles) {
         `;
         hourlyVehicleTableBody.appendChild(row);
     });
+    
+    updateHourlyPagination(vehicles.length);
 }
 
 // Filter monthly vehicles
-function filterMonthlyVehicles() {
+function filterMonthlyVehicles(resetPage = true) {
     const searchTerm = searchMonthlyInput.value.toLowerCase();
     const statusFilterValue = statusMonthlyFilter.value;
     
-    let filteredVehicles = allVehicles.filter(vehicle => {
+    filteredMonthlyVehicles = allVehicles.filter(vehicle => {
         const isMonthly = vehicle.monthly_parking === 1;
         const matchesSearch = vehicle.license_plate.toLowerCase().includes(searchTerm) ||
                             vehicle.owner_name.toLowerCase().includes(searchTerm);
@@ -248,15 +277,21 @@ function filterMonthlyVehicles() {
         return isMonthly && matchesSearch && matchesStatus;
     });
     
-    renderMonthlyVehicles(filteredVehicles);
+    // Reset to first page only when filtering, not when navigating pages
+    if (resetPage) {
+        currentMonthlyPage = 1;
+    }
+    
+    console.log('Monthly vehicles filtered:', filteredMonthlyVehicles.length, 'vehicles');
+    renderMonthlyVehicles(filteredMonthlyVehicles);
 }
 
 // Filter hourly vehicles
-function filterHourlyVehicles() {
+function filterHourlyVehicles(resetPage = true) {
     const searchTerm = searchHourlyInput.value.toLowerCase();
     const statusFilterValue = statusHourlyFilter.value;
     
-    let filteredVehicles = allVehicles.filter(vehicle => {
+    filteredHourlyVehicles = allVehicles.filter(vehicle => {
         const isHourly = vehicle.monthly_parking !== 1;
         const matchesSearch = vehicle.license_plate.toLowerCase().includes(searchTerm) ||
                             vehicle.owner_name.toLowerCase().includes(searchTerm);
@@ -265,7 +300,13 @@ function filterHourlyVehicles() {
         return isHourly && matchesSearch && matchesStatus;
     });
     
-    renderHourlyVehicles(filteredVehicles);
+    // Reset to first page only when filtering, not when navigating pages
+    if (resetPage) {
+        currentHourlyPage = 1;
+    }
+    
+    console.log('Hourly vehicles filtered:', filteredHourlyVehicles.length, 'vehicles');
+    renderHourlyVehicles(filteredHourlyVehicles);
 }
 
 // Form submission
@@ -807,34 +848,34 @@ function importFromExcel() {
 
 // Clear all data for testing
 async function clearAllData() {
-    if (!confirm('⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu không?\n\nHành động này không thể hoàn tác!')) {
+     if (!confirm('⚠️ CẢNH BÁO: Bạn có chắc chắn muốn xóa TOÀN BỘ dữ liệu không?\n\nHành động này không thể hoàn tác!')) {
         return;
     }
     
-    if (!confirm('🚨 XÁC NHẬN LẦN 2: Tất cả xe và lịch sử sẽ bị xóa vĩnh viễn!\n\nBạn có chắc chắn tiếp tục?')) {
+    if (!confirm('🚨 XÁC NHẬN LẦN 2: Tính năng chỉ có ở server test')) {
         return;
     }
     
-    try {
-        const response = await fetch('/api/clear-all-data', {
-            method: 'DELETE'
-        });
+    // try {
+    //     const response = await fetch('/api/clear-all-data', {
+    //         method: 'DELETE'
+    //     });
         
-        const result = await response.json();
+    //     const result = await response.json();
         
-        if (response.ok) {
-            showMessage('✅ ' + result.message, 'success');
-            // Reload the page to refresh all tables
-            setTimeout(() => {
-                loadVehicles();
-            }, 1000);
-        } else {
-            throw new Error(result.error || 'Có lỗi xảy ra khi xóa dữ liệu');
-        }
-    } catch (error) {
-        console.error('Clear data error:', error);
-        showMessage('❌ Lỗi xóa dữ liệu: ' + error.message, 'error');
-    }
+    //     if (response.ok) {
+    //         showMessage('✅ ' + result.message, 'success');
+    //         // Reload the page to refresh all tables
+    //         setTimeout(() => {
+    //             loadVehicles();
+    //         }, 1000);
+    //     } else {
+    //         throw new Error(result.error || 'Có lỗi xảy ra khi xóa dữ liệu');
+    //     }
+    // } catch (error) {
+    //     console.error('Clear data error:', error);
+    //     showMessage('❌ Lỗi xóa dữ liệu: ' + error.message, 'error');
+    // }
 }
 
 // Modal hide functions
@@ -866,4 +907,218 @@ function hideViewPaymentModal() {
     if (viewModalTitle) {
         viewModalTitle.innerHTML = '📋 Chi Tiết Thanh Toán';
     }
+}
+
+// Pagination functions
+function updateMonthlyPagination(totalItems) {
+    console.log('updateMonthlyPagination called with totalItems:', totalItems);
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    console.log('totalPages:', totalPages, 'currentPage:', currentMonthlyPage);
+    
+    let paginationContainer = document.getElementById('monthlyPagination');
+    
+    if (!paginationContainer) {
+        console.log('Creating new pagination container for monthly');
+        // Create pagination container after the monthly table
+        const monthlyTable = document.getElementById('monthlyVehicleTable');
+        if (monthlyTable) {
+            const tableContainer = monthlyTable.parentElement;
+            const paginationDiv = document.createElement('div');
+            paginationDiv.id = 'monthlyPagination';
+            paginationDiv.className = 'pagination-container';
+            // Insert after the table container
+            tableContainer.parentNode.insertBefore(paginationDiv, tableContainer.nextSibling);
+            paginationContainer = paginationDiv;
+            console.log('Monthly pagination container created');
+        } else {
+            console.error('Monthly table not found!');
+            return;
+        }
+    }
+    
+    if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+    
+    let paginationHTML = '<div class="pagination">';
+    
+    // Always show Previous button (disabled if on first page)
+    if (currentMonthlyPage > 1) {
+        paginationHTML += `<button class="pagination-btn" onclick="goToMonthlyPage(${currentMonthlyPage - 1})">‹ Trước</button>`;
+    } else {
+        paginationHTML += `<button class="pagination-btn" disabled>‹ Trước</button>`;
+    }
+    
+    // Smart page number display
+    const { startPage, endPage, showStartEllipsis, showEndEllipsis } = getPageRange(currentMonthlyPage, totalPages);
+    
+    // First page
+    if (showStartEllipsis) {
+        paginationHTML += `<button class="pagination-btn" onclick="goToMonthlyPage(1)">1</button>`;
+        if (startPage > 2) {
+            paginationHTML += `<span class="pagination-ellipsis">...</span>`;
+        }
+    }
+    
+    // Page numbers in range
+    for (let i = startPage; i <= endPage; i++) {
+        if (i === currentMonthlyPage) {
+            paginationHTML += `<button class="pagination-btn active">${i}</button>`;
+        } else {
+            paginationHTML += `<button class="pagination-btn" onclick="goToMonthlyPage(${i})">${i}</button>`;
+        }
+    }
+    
+    // Last page
+    if (showEndEllipsis) {
+        if (endPage < totalPages - 1) {
+            paginationHTML += `<span class="pagination-ellipsis">...</span>`;
+        }
+        paginationHTML += `<button class="pagination-btn" onclick="goToMonthlyPage(${totalPages})">${totalPages}</button>`;
+    }
+    
+    // Always show Next button (disabled if on last page)
+    if (currentMonthlyPage < totalPages) {
+        paginationHTML += `<button class="pagination-btn" onclick="goToMonthlyPage(${currentMonthlyPage + 1})">Sau ›</button>`;
+    } else {
+        paginationHTML += `<button class="pagination-btn" disabled>Sau ›</button>`;
+    }
+    
+    paginationHTML += '</div>';
+    paginationHTML += `<div class="pagination-info">Trang ${currentMonthlyPage} / ${totalPages} (${totalItems} xe)</div>`;
+    
+    paginationContainer.innerHTML = paginationHTML;
+    console.log('Monthly pagination HTML updated');
+}
+
+function updateHourlyPagination(totalItems) {
+    console.log('updateHourlyPagination called with totalItems:', totalItems);
+    const totalPages = Math.ceil(totalItems / itemsPerPage);
+    console.log('totalPages:', totalPages, 'currentPage:', currentHourlyPage);
+    
+    let paginationContainer = document.getElementById('hourlyPagination');
+    
+    if (!paginationContainer) {
+        console.log('Creating new pagination container for hourly');
+        // Create pagination container after the hourly table
+        const hourlyTable = document.getElementById('hourlyVehicleTable');
+        if (hourlyTable) {
+            const tableContainer = hourlyTable.parentElement;
+            const paginationDiv = document.createElement('div');
+            paginationDiv.id = 'hourlyPagination';
+            paginationDiv.className = 'pagination-container';
+            // Insert after the table container
+            tableContainer.parentNode.insertBefore(paginationDiv, tableContainer.nextSibling);
+            paginationContainer = paginationDiv;
+            console.log('Hourly pagination container created');
+        } else {
+            console.error('Hourly table not found!');
+            return;
+        }
+    }
+    
+    if (totalPages <= 1) {
+        paginationContainer.innerHTML = '';
+        return;
+    }
+    
+    let paginationHTML = '<div class="pagination">';
+    
+    // Always show Previous button (disabled if on first page)
+    if (currentHourlyPage > 1) {
+        paginationHTML += `<button class="pagination-btn" onclick="goToHourlyPage(${currentHourlyPage - 1})">‹ Trước</button>`;
+    } else {
+        paginationHTML += `<button class="pagination-btn" disabled>‹ Trước</button>`;
+    }
+    
+    // Smart page number display
+    const { startPage, endPage, showStartEllipsis, showEndEllipsis } = getPageRange(currentHourlyPage, totalPages);
+    
+    // First page
+    if (showStartEllipsis) {
+        paginationHTML += `<button class="pagination-btn" onclick="goToHourlyPage(1)">1</button>`;
+        if (startPage > 2) {
+            paginationHTML += `<span class="pagination-ellipsis">...</span>`;
+        }
+    }
+    
+    // Page numbers in range
+    for (let i = startPage; i <= endPage; i++) {
+        if (i === currentHourlyPage) {
+            paginationHTML += `<button class="pagination-btn active">${i}</button>`;
+        } else {
+            paginationHTML += `<button class="pagination-btn" onclick="goToHourlyPage(${i})">${i}</button>`;
+        }
+    }
+    
+    // Last page
+    if (showEndEllipsis) {
+        if (endPage < totalPages - 1) {
+            paginationHTML += `<span class="pagination-ellipsis">...</span>`;
+        }
+        paginationHTML += `<button class="pagination-btn" onclick="goToHourlyPage(${totalPages})">${totalPages}</button>`;
+    }
+    
+    // Always show Next button (disabled if on last page)
+    if (currentHourlyPage < totalPages) {
+        paginationHTML += `<button class="pagination-btn" onclick="goToHourlyPage(${currentHourlyPage + 1})">Sau ›</button>`;
+    } else {
+        paginationHTML += `<button class="pagination-btn" disabled>Sau ›</button>`;
+    }
+    
+    paginationHTML += '</div>';
+    paginationHTML += `<div class="pagination-info">Trang ${currentHourlyPage} / ${totalPages} (${totalItems} xe)</div>`;
+    
+    paginationContainer.innerHTML = paginationHTML;
+    console.log('Hourly pagination HTML updated');
+}
+
+function goToMonthlyPage(page) {
+    console.log('goToMonthlyPage called with page:', page);
+    currentMonthlyPage = page;
+    filterMonthlyVehicles(false); // Don't reset page when navigating
+}
+
+function goToHourlyPage(page) {
+    console.log('goToHourlyPage called with page:', page);
+    currentHourlyPage = page;
+    filterHourlyVehicles(false); // Don't reset page when navigating
+}
+
+// Helper function to calculate page range for smart pagination
+function getPageRange(currentPage, totalPages) {
+    const maxVisible = 5; // Maximum number of page buttons to show
+    let startPage, endPage;
+    let showStartEllipsis = false;
+    let showEndEllipsis = false;
+    
+    if (totalPages <= maxVisible) {
+        // Show all pages if total is small
+        startPage = 1;
+        endPage = totalPages;
+    } else {
+        // Calculate range around current page
+        const halfVisible = Math.floor((maxVisible - 2) / 2); // -2 for first and last page
+        
+        if (currentPage <= halfVisible + 1) {
+            // Near the beginning
+            startPage = 1;
+            endPage = maxVisible - 1;
+            showEndEllipsis = true;
+        } else if (currentPage >= totalPages - halfVisible) {
+            // Near the end
+            startPage = totalPages - maxVisible + 2;
+            endPage = totalPages;
+            showStartEllipsis = true;
+        } else {
+            // In the middle
+            startPage = currentPage - halfVisible;
+            endPage = currentPage + halfVisible;
+            showStartEllipsis = true;
+            showEndEllipsis = true;
+        }
+    }
+    
+    return { startPage, endPage, showStartEllipsis, showEndEllipsis };
 }

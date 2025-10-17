@@ -628,3 +628,86 @@ tbody tr:nth-child(even) {
     font-size: 16px;
     font-weight: 600;
 }
+
+/* Pagination Styles */
+.pagination-container {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.pagination {
+    display: inline-flex;
+    gap: 5px;
+    margin-bottom: 10px;
+}
+
+.pagination-btn {
+    padding: 10px 15px;
+    border: 1px solid #ddd;
+    background: white;
+    color: #333;
+    cursor: pointer;
+    border-radius: 5px;
+    font-size: 14px;
+    transition: all 0.3s ease;
+    min-width: 45px;
+}
+
+.pagination-btn:hover {
+    background: #f8f9fa;
+    border-color: #007bff;
+    color: #007bff;
+}
+
+.pagination-btn.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+    font-weight: bold;
+}
+
+.pagination-btn:disabled {
+    background: #f8f9fa;
+    color: #6c757d;
+    cursor: not-allowed;
+    border-color: #dee2e6;
+}
+
+.pagination-ellipsis {
+    padding: 10px 8px;
+    color: #6c757d;
+    font-size: 14px;
+    display: inline-flex;
+    align-items: center;
+    min-width: 35px;
+    justify-content: center;
+}
+
+.pagination-info {
+    color: #6c757d;
+    font-size: 14px;
+    margin-top: 10px;
+}
+
+/* Fixed width for pagination container to prevent layout shift */
+.pagination {
+    display: inline-flex;
+    gap: 5px;
+    margin-bottom: 10px;
+    justify-content: center;
+    min-height: 44px; /* Fixed height to prevent jump */
+    align-items: center;
+}
+
+/* Responsive pagination */
+@media (max-width: 768px) {
+    .pagination-btn {
+        padding: 8px 12px;
+        font-size: 12px;
+        min-width: 40px;
+    }
+    
+    .pagination {
+        gap: 3px;
+    }
+}
