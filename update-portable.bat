@@ -32,18 +32,24 @@ if exist "public\template.xlsx" (
     copy /Y public\template.xlsx portable-parking-app\public\ >nul
 )
 
-REM Check if package.json was modified (simple check)
-echo.
-set /p updateDeps="Co can update dependencies khong? (y/N): "
-if /i "%updateDeps%"=="y" (
+REM Copy documentation files
+echo Copying documentation...
+if exist "portable-parking-app\HUONG-DAN.md" (
+    echo User guide already exists
+) else (
+    echo Creating user guide...
+)
+
+REM Copy node_modules if exists (optional for faster startup)
+echo Checking for node_modules...
+if exist node_modules (
     echo Copying node_modules... (This may take a while)
-    if exist node_modules (
-        rmdir /s /q portable-parking-app\node_modules 2>nul
-        xcopy /E /I /Q node_modules portable-parking-app\node_modules >nul
-        echo Dependencies updated!
-    ) else (
-        echo node_modules not found, please run 'npm install' first
-    )
+    rmdir /s /q portable-parking-app\node_modules 2>nul
+    xcopy /E /I /Q node_modules portable-parking-app\node_modules >nul
+    echo ✅ Dependencies copied - app will start faster!
+) else (
+    echo ⚠️  node_modules not found - will auto-install on first run
+    echo This is OK, start.bat will handle npm install automatically
 )
 
 echo.
@@ -55,12 +61,10 @@ echo Ban co the chay portable app bang cach:
 echo 1. Vao thu muc portable-parking-app
 echo 2. Double-click start.bat
 echo.
-echo Hoac test ngay bay gio?
-set /p testNow="Test app ngay bay gio? (Y/n): "
-if /i not "%testNow%"=="n" (
-    cd portable-parking-app
-    start "" cmd /c "start.bat"
-    cd ..
-)
+echo Test app ngay bay gio...
+echo.
+cd portable-parking-app
+start "" "start.bat"
+cd ..
 
 pause
