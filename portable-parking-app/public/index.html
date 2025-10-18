@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Quản lý Bãi Xe</title>
-    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="styles.css?v=2.0">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
@@ -74,11 +74,6 @@
                 <h2>📅 Xe Gửi Tháng</h2>
                 <div class="filter-section">
                     <input type="text" id="searchMonthlyInput" placeholder="Tìm kiếm xe gửi tháng...">
-                    <select id="statusMonthlyFilter">
-                        <option value="">Tất cả trạng thái</option>
-                        <option value="IN">Trong bãi</option>
-                        <option value="OUT">Đã ra</option>
-                    </select>
                     <div class="excel-buttons">
                         <button class="btn btn-success" onclick="exportMonthlyToExcel()">
                             📤 Export Excel (2 Sheets)
@@ -122,11 +117,6 @@
                 <h2>⏰ Xe Gửi Theo Giờ</h2>
                 <div class="filter-section">
                     <input type="text" id="searchHourlyInput" placeholder="Tìm kiếm xe gửi theo giờ...">
-                    <select id="statusHourlyFilter">
-                        <option value="">Tất cả trạng thái</option>
-                        <option value="IN">Trong bãi</option>
-                        <option value="OUT">Đã ra</option>
-                    </select>
                 </div>
             </div>
             
@@ -378,6 +368,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=2.0"></script>
 </body>
 </html>

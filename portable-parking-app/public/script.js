@@ -17,8 +17,6 @@ const monthlyVehicleTableBody = document.getElementById('monthlyVehicleTableBody
 const hourlyVehicleTableBody = document.getElementById('hourlyVehicleTableBody');
 const searchMonthlyInput = document.getElementById('searchMonthlyInput');
 const searchHourlyInput = document.getElementById('searchHourlyInput');
-const statusMonthlyFilter = document.getElementById('statusMonthlyFilter');
-const statusHourlyFilter = document.getElementById('statusHourlyFilter');
 const cancelBtn = document.getElementById('cancelBtn');
 
 // Modal elements
@@ -63,11 +61,9 @@ function setupEventListeners() {
     
     // Monthly vehicles filters
     searchMonthlyInput.addEventListener('input', filterMonthlyVehicles);
-    statusMonthlyFilter.addEventListener('change', filterMonthlyVehicles);
     
     // Hourly vehicles filters
     searchHourlyInput.addEventListener('input', filterHourlyVehicles);
-    statusHourlyFilter.addEventListener('change', filterHourlyVehicles);
     
     // Modal events
     confirmYes.addEventListener('click', handleConfirmYes);
@@ -275,27 +271,13 @@ function renderHourlyVehicles(vehicles) {
 // Filter monthly vehicles
 function filterMonthlyVehicles(resetPage = true) {
     const searchTerm = searchMonthlyInput.value.toLowerCase();
-    const statusFilterValue = statusMonthlyFilter.value;
     
     filteredMonthlyVehicles = allVehicles.filter(vehicle => {
         const isMonthly = vehicle.monthly_parking === 1;
         const matchesSearch = vehicle.license_plate.toLowerCase().includes(searchTerm) ||
                             vehicle.owner_name.toLowerCase().includes(searchTerm);
         
-        // Handle both string ('IN'/'OUT') and boolean/integer (1/0) status values
-        let vehicleStatusValue;
-        if (typeof vehicle.isParking === 'boolean') {
-            vehicleStatusValue = vehicle.isParking ? 'IN' : 'OUT';
-        } else if (typeof vehicle.isParking === 'number') {
-            vehicleStatusValue = vehicle.isParking === 1 ? 'IN' : 'OUT';
-        } else {
-            // Fallback to old status field if exists
-            vehicleStatusValue = vehicle.status || 'OUT';
-        }
-        
-        const matchesStatus = !statusFilterValue || vehicleStatusValue === statusFilterValue;
-        
-        return isMonthly && matchesSearch && matchesStatus;
+        return isMonthly && matchesSearch;
     });
     
     // Reset to first page only when filtering, not when navigating pages
@@ -310,27 +292,13 @@ function filterMonthlyVehicles(resetPage = true) {
 // Filter hourly vehicles
 function filterHourlyVehicles(resetPage = true) {
     const searchTerm = searchHourlyInput.value.toLowerCase();
-    const statusFilterValue = statusHourlyFilter.value;
     
     filteredHourlyVehicles = allVehicles.filter(vehicle => {
         const isHourly = vehicle.monthly_parking !== 1;
         const matchesSearch = vehicle.license_plate.toLowerCase().includes(searchTerm) ||
                             vehicle.owner_name.toLowerCase().includes(searchTerm);
         
-        // Handle both string ('IN'/'OUT') and boolean/integer (1/0) status values
-        let vehicleStatusValue;
-        if (typeof vehicle.isParking === 'boolean') {
-            vehicleStatusValue = vehicle.isParking ? 'IN' : 'OUT';
-        } else if (typeof vehicle.isParking === 'number') {
-            vehicleStatusValue = vehicle.isParking === 1 ? 'IN' : 'OUT';
-        } else {
-            // Fallback to old status field if exists
-            vehicleStatusValue = vehicle.status || 'OUT';
-        }
-        
-        const matchesStatus = !statusFilterValue || vehicleStatusValue === statusFilterValue;
-        
-        return isHourly && matchesSearch && matchesStatus;
+        return isHourly && matchesSearch;
     });
     
     // Reset to first page only when filtering, not when navigating pages
