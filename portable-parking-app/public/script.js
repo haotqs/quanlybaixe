@@ -226,6 +226,7 @@ function renderMonthlyVehicles(vehicles) {
                         `<button class="btn btn-danger" onclick="exitVehicle(${vehicle.id})">Xe ra</button>` : 
                         `<button class="btn btn-secondary" onclick="reenterVehicle(${vehicle.id})">Vào lại</button>`
                     }
+                    <button class="btn btn-danger" onclick="deleteVehicle(${vehicle.id})" title="Xóa xe">🗑️</button>
                 </div>
             </td>
         `;
@@ -281,6 +282,7 @@ function renderHourlyVehicles(vehicles) {
                         `<button class="btn btn-success" onclick="exitVehicle(${vehicle.id})">Xe ra</button>` : 
                         `<button class="btn btn-secondary" onclick="reenterVehicle(${vehicle.id})">Vào lại</button>`
                     }
+                    <button class="btn btn-danger" onclick="deleteVehicle(${vehicle.id})" title="Xóa xe">🗑️</button>
                 </div>
             </td>
         `;
@@ -994,6 +996,40 @@ async function clearAllData() {
     //     console.error('Clear data error:', error);
     //     showMessage('❌ Lỗi xóa dữ liệu: ' + error.message, 'error');
     // }
+}
+
+// Delete individual vehicle
+async function deleteVehicle(vehicleId) {
+    // Find vehicle info for confirmation message
+    const vehicle = allVehicles.find(v => v.id === vehicleId);
+    if (!vehicle) {
+        showMessage('Không tìm thấy thông tin xe', 'error');
+        return;
+    }
+    
+    const confirmMessage = `Bạn có chắc chắn muốn xóa xe "${vehicle.license_plate}" của ${vehicle.owner_name}?\n\nHành động này không thể hoàn tác!`;
+    
+    if (!confirm(confirmMessage)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/vehicles/${vehicleId}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showMessage(result.message, 'success');
+            loadVehicles(); // Reload the vehicle list
+        } else {
+            throw new Error(result.error || 'Có lỗi xảy ra khi xóa xe');
+        }
+    } catch (error) {
+        console.error('Delete vehicle error:', error);
+        showMessage('Lỗi xóa xe: ' + error.message, 'error');
+    }
 }
 
 // Modal hide functions

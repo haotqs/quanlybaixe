@@ -435,224 +435,259 @@ app.post('/api/import-excel', (req, res) => {
         }
 
         const file = req.files.file;
-        const workbook = xlsx.read(file.data, { type: 'buffer' });
-        
-        let importedCount = 0;
-        let errors = [];
 
-        // Process each sheet
-        workbook.SheetNames.forEach(sheetName => {
-            const worksheet = workbook.Sheets[sheetName];
-            
-            // Thử đọc với nhiều options khác nhau
-            const data = xlsx.utils.sheet_to_json(worksheet);
-            const dataWithHeaders = xlsx.utils.sheet_to_json(worksheet, { header: 1 }); // Đọc thành array
-            const range = xlsx.utils.decode_range(worksheet['!ref']);
-            
-            console.log(`\n=== Sheet: ${sheetName} ===`);
-            console.log('Sheet range:', worksheet['!ref']);
-            console.log('Total data rows found:', data.length);
-            console.log('Available columns (object format):', Object.keys(data[0] || {}));
-            console.log('First row data (object format):', data[0]);
-            
-            if (data.length > 1) {
-                console.log('Sample actual data row (object format):', data[1]);
-            } else {
-                console.log('NO DATA ROWS FOUND - only header row exists!');
-            }
-            
-            console.log('\n--- Array format (first 5 rows) ---');
-            console.log('Total array rows:', dataWithHeaders.length);
-            for (let i = 0; i < Math.min(5, dataWithHeaders.length); i++) {
-                console.log(`Array Row ${i}:`, dataWithHeaders[i]);
-            }
-            
-            console.log(`\n--- Raw cell data (first 5 columns of first 3 rows) ---`);
-            for (let R = 0; R <= Math.min(2, range.e.r); R++) {
-                let rowData = [];
-                for (let C = 0; C <= Math.min(25, range.e.c); C++) { // Check up to column Z
-                    const cellRef = xlsx.utils.encode_cell({ r: R, c: C });
-                    const cell = worksheet[cellRef];
-                    rowData.push(cell ? cell.v : null);
+        // Clear existing data before import to ensure a clean import
+        db.serialize(() => {
+            db.run('DELETE FROM vehicles', (err) => {
+                if (err) {
+                    console.error('Error clearing vehicles before import:', err.message);
+                    return res.status(500).json({ error: 'Lỗi xóa dữ liệu vehicles: ' + err.message });
                 }
-                console.log(`Row ${R}:`, rowData);
-            }
-            
-            // Debug: Show all data before filtering
-            console.log('\n--- ALL DATA ROWS (first 5) ---');
-            for (let i = 0; i < Math.min(5, data.length); i++) {
-                console.log(`Data Row ${i}:`, data[i]);
-            }
-            
-            // Filter out header rows and empty rows
-            const validData = data.filter((row, index) => {
-                // Kiểm tra cột __EMPTY (SỐ XE) thay vì 'SỐ XE'
-                const licensePlate = String(row['__EMPTY'] || row['SỐ XE'] || row['Biển số'] || '').trim();
-                const isValid = licensePlate && 
-                       !licensePlate.toLowerCase().includes('biển số') &&
-                       !licensePlate.toLowerCase().includes('license') &&
-                       !licensePlate.toLowerCase().includes('số xe') &&
-                       licensePlate !== 'SỐ XE';
-                
-                console.log(`Row ${index} - License: "${licensePlate}" - Valid: ${isValid}`);
-                return isValid;
             });
 
-            console.log(`\n*** Found ${validData.length} valid data rows in sheet ${sheetName} ***`);
+            db.run('DELETE FROM vehicle_history', (err) => {
+                if (err) {
+                    console.error('Error clearing vehicle_history before import:', err.message);
+                    return res.status(500).json({ error: 'Lỗi xóa dữ liệu vehicle_history: ' + err.message });
+                }
+            });
 
-            validData.forEach((row, index) => {
+            // Reset auto-increment counters
+            db.run('DELETE FROM sqlite_sequence WHERE name IN ("vehicles", "vehicle_history")', (seqErr) => {
+                if (seqErr) {
+                    console.error('Error resetting sqlite_sequence before import:', seqErr.message);
+                    return res.status(500).json({ error: 'Lỗi reset sqlite_sequence: ' + seqErr.message });
+                }
+
+                console.log('Existing data cleared successfully before import. Starting import...');
+
+                // Proceed with import after clearing is done
                 try {
-                    // Sử dụng đúng tên cột từ Excel
-                    let licensePlate = String(row['__EMPTY'] || row['SỐ XE'] || '').trim();
-                    const ownerNamePhone = String(row['__EMPTY_1'] || row['TÊN\nSỐ ĐT'] || '').trim();
-                    const vehicleTypePrice = String(row['__EMPTY_2'] || row['LOẠI XE\nGIÁ GỬI'] || '').trim();
-                    const entryDate = row['__EMPTY_3'] || row['NGÀY GỬI'] || new Date().toISOString();
-                    const paymentInfo = String(row['__EMPTY_4'] || row['THANH TOÁN'] || '').trim();
-                    const notes = String(row['__EMPTY_20'] || row['GHI CHÚ'] || '').trim();
+                    const workbook = xlsx.read(file.data, { type: 'buffer' });
                     
-                    console.log(`Processing row ${index + 1}:`, {
-                        licensePlate,
-                        ownerNamePhone,
-                        vehicleTypePrice,
-                        entryDate,
-                        paymentInfo
-                    });
-                    
-                    // Tách thông tin từ cột "TÊN\nSỐ ĐT"
-                    let ownerName = '';
-                    let phone = '';
-                    if (ownerNamePhone.includes('\n')) {
-                        const parts = ownerNamePhone.split('\n');
-                        ownerName = parts[0].trim();
-                        phone = parts[1] ? parts[1].trim() : '';
-                    } else {
-                        ownerName = ownerNamePhone;
-                    }
-                    
-                    // Tách thông tin từ cột "LOẠI XE\nGIÁ GỬI"  
-                    let vehicleType = 'Xe máy';
-                    let price = 0;
-                    if (vehicleTypePrice.includes('\n')) {
-                        const parts = vehicleTypePrice.split('\n');
-                        vehicleType = parts[0].trim() || 'Xe máy';
-                        if (parts[1]) {
-                            // Chuẩn hóa định dạng tiền: xử lý cả dấu . và , làm separator
-                            const priceStr = parts[1].trim()
-                                .replace(/[^\d.,]/g, '') // Giữ lại chỉ số, dấu . và ,
-                                .replace(/[.,]/g, ''); // Bỏ tất cả dấu . và ,
-                            price = parseInt(priceStr) || 0;
-                        }
-                    } else if (vehicleTypePrice) {
-                        vehicleType = vehicleTypePrice;
-                    }
-                    
-                    // Detect if this is monthly or hourly vehicle based on sheet name
-                    const hourlyKeywords = ['giờ', 'hour', 'theo giờ', 'gui theo gio'];
-                    const monthlyKeywords = ['tháng', 'month', 'gui thang', 'gửi tháng'];
-                    
-                    let sheetType = null;
-                    const sheetNameLower = sheetName.toLowerCase();
-                    
-                    if (hourlyKeywords.some(keyword => sheetNameLower.includes(keyword))) {
-                        sheetType = 'hourly';
-                    } else if (monthlyKeywords.some(keyword => sheetNameLower.includes(keyword))) {
-                        sheetType = 'monthly';
-                    } else {
-                        // Fallback: analyze data structure to determine type
-                        // If sheet has many monthly payment columns, it's monthly
-                        const hasMonthlyColumns = Object.keys(row).some(key => 
-                            key.includes('EMPTY_6') || key.includes('EMPTY_8') || key.includes('EMPTY_10')
-                        );
-                        sheetType = hasMonthlyColumns ? 'monthly' : 'hourly';
-                    }
-                    
-                    const isMonthly = sheetType === 'monthly';
-                    console.log(`Sheet "${sheetName}" detected as: ${sheetType} (isMonthly: ${isMonthly})`)
-                    
-                    // Handle license plate formatting
-                    if (licensePlate.includes('\n')) {
-                        licensePlate = licensePlate.replace(/\n/g, '-');
-                    }
+                    let importedCount = 0;
+                    let errors = [];
 
-                    // Process monthly payments - xử lý thanh toán theo tháng từ Excel
-                    let monthlyPayments = {};
-                    if (isMonthly) {
-                        console.log('All keys in row:', Object.keys(row));
-                        console.log('Full row data:', row);
+                    // Process each sheet
+                    workbook.SheetNames.forEach(sheetName => {
+                        const worksheet = workbook.Sheets[sheetName];
                         
-                        // Mapping cố định dựa trên cấu trúc Excel thực tế
-                        const monthMappings = [
-                            { month: 6, moneyCol: '__EMPTY_6', dateCol: '__EMPTY_7' },   // THÁNG 6: H, I
-                            { month: 7, moneyCol: '__EMPTY_8', dateCol: '__EMPTY_9' },   // THÁNG 7: J, K
-                            { month: 8, moneyCol: '__EMPTY_10', dateCol: '__EMPTY_11' }, // THÁNG 8: L, M
-                            { month: 9, moneyCol: '__EMPTY_12', dateCol: '__EMPTY_13' }, // THÁNG 9: N, O
-                            { month: 10, moneyCol: '__EMPTY_14', dateCol: '__EMPTY_15' }, // THÁNG 10: P, Q
-                            { month: 11, moneyCol: '__EMPTY_16', dateCol: '__EMPTY_17' }, // THÁNG 11: R, S
-                            { month: 12, moneyCol: '__EMPTY_18', dateCol: '__EMPTY_19' }  // THÁNG 12: T, U
-                        ];
+                        // Thử đọc với nhiều options khác nhau
+                        const data = xlsx.utils.sheet_to_json(worksheet);
+                        const dataWithHeaders = xlsx.utils.sheet_to_json(worksheet, { header: 1 }); // Đọc thành array
+                        const range = xlsx.utils.decode_range(worksheet['!ref']);
                         
-                        monthMappings.forEach(mapping => {
-                            const moneyValue = row[mapping.moneyCol];
-                            const dateValue = row[mapping.dateCol];
+                        console.log(`\n=== Sheet: ${sheetName} ===`);
+                        console.log('Sheet range:', worksheet['!ref']);
+                        console.log('Total data rows found:', data.length);
+                        console.log('Available columns (object format):', Object.keys(data[0] || {}));
+                        console.log('First row data (object format):', data[0]);
+                        
+                        if (data.length > 1) {
+                            console.log('Sample actual data row (object format):', data[1]);
+                        } else {
+                            console.log('NO DATA ROWS FOUND - only header row exists!');
+                        }
+                        
+                        console.log('\n--- Array format (first 5 rows) ---');
+                        console.log('Total array rows:', dataWithHeaders.length);
+                        for (let i = 0; i < Math.min(5, dataWithHeaders.length); i++) {
+                            console.log(`Array Row ${i}:`, dataWithHeaders[i]);
+                        }
+                        
+                        console.log(`\n--- Raw cell data (first 5 columns of first 3 rows) ---`);
+                        for (let R = 0; R <= Math.min(2, range.e.r); R++) {
+                            let rowData = [];
+                            for (let C = 0; C <= Math.min(25, range.e.c); C++) { // Check up to column Z
+                                const cellRef = xlsx.utils.encode_cell({ r: R, c: C });
+                                const cell = worksheet[cellRef];
+                                rowData.push(cell ? cell.v : null);
+                            }
+                            console.log(`Row ${R}:`, rowData);
+                        }
+                        
+                        // Debug: Show all data before filtering
+                        console.log('\n--- ALL DATA ROWS (first 5) ---');
+                        for (let i = 0; i < Math.min(5, data.length); i++) {
+                            console.log(`Data Row ${i}:`, data[i]);
+                        }
+                        
+                        // Filter out header rows and empty rows
+                        const validData = data.filter((row, index) => {
+                            // Kiểm tra cột __EMPTY (SỐ XE) thay vì 'SỐ XE'
+                            const licensePlate = String(row['__EMPTY'] || row['SỐ XE'] || row['Biển số'] || '').trim();
+                            const isValid = licensePlate && 
+                                   !licensePlate.toLowerCase().includes('biển số') &&
+                                   !licensePlate.toLowerCase().includes('license') &&
+                                   !licensePlate.toLowerCase().includes('số xe') &&
+                                   licensePlate !== 'SỐ XE';
                             
-                            console.log(`Month ${mapping.month}: money=${moneyValue}, date=${dateValue}`);
-                            
-                            // Check if there's payment data (not X and has numeric value)
-                            if (moneyValue && typeof moneyValue === 'number' && moneyValue > 0) {
-                                monthlyPayments[mapping.month] = {
-                                    paid: true,
-                                    amount: moneyValue,
-                                    date: dateValue && typeof dateValue === 'number' ? 
-                                          new Date((dateValue - 25569) * 86400 * 1000).toISOString().split('T')[0] : // Convert Excel date to YYYY-MM-DD
-                                          new Date().toISOString().split('T')[0]
-                                };
-                                console.log(`✓ Month ${mapping.month} PAID: ${moneyValue} on ${monthlyPayments[mapping.month].date}`);
+                            console.log(`Row ${index} - License: "${licensePlate}" - Valid: ${isValid}`);
+                            return isValid;
+                        });
+
+                        console.log(`\n*** Found ${validData.length} valid data rows in sheet ${sheetName} ***`);
+
+                        validData.forEach((row, index) => {
+                            try {
+                                // Sử dụng đúng tên cột từ Excel
+                                let licensePlate = String(row['__EMPTY'] || row['SỐ XE'] || '').trim();
+                                const ownerNamePhone = String(row['__EMPTY_1'] || row['TÊN\nSỐ ĐT'] || '').trim();
+                                const vehicleTypePrice = String(row['__EMPTY_2'] || row['LOẠI XE\nGIÁ GỬI'] || '').trim();
+                                const entryDate = row['__EMPTY_3'] || row['NGÀY GỬI'] || new Date().toISOString();
+                                const paymentInfo = String(row['__EMPTY_4'] || row['THANH TOÁN'] || '').trim();
+                                const notes = String(row['__EMPTY_20'] || row['GHI CHÚ'] || '').trim();
+                                
+                                console.log(`Processing row ${index + 1}:`, {
+                                    licensePlate,
+                                    ownerNamePhone,
+                                    vehicleTypePrice,
+                                    entryDate,
+                                    paymentInfo
+                                });
+                                
+                                // Tách thông tin từ cột "TÊN\nSỐ ĐT"
+                                let ownerName = '';
+                                let phone = '';
+                                if (ownerNamePhone.includes('\n')) {
+                                    const parts = ownerNamePhone.split('\n');
+                                    ownerName = parts[0].trim();
+                                    phone = parts[1] ? parts[1].trim() : '';
+                                } else {
+                                    ownerName = ownerNamePhone;
+                                }
+                                
+                                // Tách thông tin từ cột "LOẠI XE\nGIÁ GỬI"  
+                                let vehicleType = 'Xe máy';
+                                let price = 0;
+                                if (vehicleTypePrice.includes('\n')) {
+                                    const parts = vehicleTypePrice.split('\n');
+                                    vehicleType = parts[0].trim() || 'Xe máy';
+                                    if (parts[1]) {
+                                        // Chuẩn hóa định dạng tiền: xử lý cả dấu . và , làm separator
+                                        const priceStr = parts[1].trim()
+                                            .replace(/[^\d.,]/g, '') // Giữ lại chỉ số, dấu . và ,
+                                            .replace(/[.,]/g, ''); // Bỏ tất cả dấu . và ,
+                                        price = parseInt(priceStr) || 0;
+                                    }
+                                } else if (vehicleTypePrice) {
+                                    vehicleType = vehicleTypePrice;
+                                }
+                                
+                                // Detect if this is monthly or hourly vehicle based on sheet name
+                                const hourlyKeywords = ['giờ', 'hour', 'theo giờ', 'gui theo gio'];
+                                const monthlyKeywords = ['tháng', 'month', 'gui thang', 'gửi tháng'];
+                                
+                                let sheetType = null;
+                                const sheetNameLower = sheetName.toLowerCase();
+                                
+                                if (hourlyKeywords.some(keyword => sheetNameLower.includes(keyword))) {
+                                    sheetType = 'hourly';
+                                } else if (monthlyKeywords.some(keyword => sheetNameLower.includes(keyword))) {
+                                    sheetType = 'monthly';
+                                } else {
+                                    // Fallback: analyze data structure to determine type
+                                    // If sheet has many monthly payment columns, it's monthly
+                                    const hasMonthlyColumns = Object.keys(row).some(key => 
+                                        key.includes('EMPTY_6') || key.includes('EMPTY_8') || key.includes('EMPTY_10')
+                                    );
+                                    sheetType = hasMonthlyColumns ? 'monthly' : 'hourly';
+                                }
+                                
+                                const isMonthly = sheetType === 'monthly';
+                                console.log(`Sheet "${sheetName}" detected as: ${sheetType} (isMonthly: ${isMonthly})`)
+                                
+                                // Handle license plate formatting
+                                if (licensePlate.includes('\n')) {
+                                    licensePlate = licensePlate.replace(/\n/g, '-');
+                                }
+
+                                // Process monthly payments - xử lý thanh toán theo tháng từ Excel
+                                let monthlyPayments = {};
+                                if (isMonthly) {
+                                    console.log('All keys in row:', Object.keys(row));
+                                    console.log('Full row data:', row);
+                                    
+                                    // Mapping cố định dựa trên cấu trúc Excel thực tế
+                                    const monthMappings = [
+                                        { month: 6, moneyCol: '__EMPTY_6', dateCol: '__EMPTY_7' },   // THÁNG 6: H, I
+                                        { month: 7, moneyCol: '__EMPTY_8', dateCol: '__EMPTY_9' },   // THÁNG 7: J, K
+                                        { month: 8, moneyCol: '__EMPTY_10', dateCol: '__EMPTY_11' }, // THÁNG 8: L, M
+                                        { month: 9, moneyCol: '__EMPTY_12', dateCol: '__EMPTY_13' }, // THÁNG 9: N, O
+                                        { month: 10, moneyCol: '__EMPTY_14', dateCol: '__EMPTY_15' }, // THÁNG 10: P, Q
+                                        { month: 11, moneyCol: '__EMPTY_16', dateCol: '__EMPTY_17' }, // THÁNG 11: R, S
+                                        { month: 12, moneyCol: '__EMPTY_18', dateCol: '__EMPTY_19' }  // THÁNG 12: T, U
+                                    ];
+                                    
+                                    monthMappings.forEach(mapping => {
+                                        const moneyValue = row[mapping.moneyCol];
+                                        const dateValue = row[mapping.dateCol];
+                                        
+                                        console.log(`Month ${mapping.month}: money=${moneyValue}, date=${dateValue}`);
+                                        
+                                        // Check if there's payment data (not X and has numeric value)
+                                        if (moneyValue && typeof moneyValue === 'number' && moneyValue > 0) {
+                                            monthlyPayments[mapping.month] = {
+                                                paid: true,
+                                                amount: moneyValue,
+                                                date: dateValue && typeof dateValue === 'number' ? 
+                                                      new Date((dateValue - 25569) * 86400 * 1000).toISOString().split('T')[0] : // Convert Excel date to YYYY-MM-DD
+                                                      new Date().toISOString().split('T')[0]
+                                            };
+                                            console.log(`✓ Month ${mapping.month} PAID: ${moneyValue} on ${monthlyPayments[mapping.month].date}`);
+                                        }
+                                    });
+                                    
+                                    console.log('Processed monthly payments:', monthlyPayments);
+                                }
+
+                                // Insert vehicle - Import vehicles are always "exited" (isParking = false)
+                                db.run(`INSERT OR REPLACE INTO vehicles 
+                                        (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, monthly_parking, monthly_payments, monthly_paid, payment_date) 
+                                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                                    [
+                                        licensePlate,
+                                        vehicleType,
+                                        ownerName,
+                                        phone,
+                                        new Date().toISOString(),
+                                        new Date().toISOString(), // Set exit_date since isParking = false
+                                        price,
+                                        0, // isParking = false for imported vehicles
+                                        isMonthly ? 1 : 0,
+                                        isMonthly ? JSON.stringify(monthlyPayments) : null,
+                                        isMonthly ? (Object.keys(monthlyPayments).length > 0 ? 1 : 0) : 0,
+                                        isMonthly ? new Date().toISOString() : null
+                                    ],
+                                    function(err) {
+                                        if (err) {
+                                            errors.push(`Lỗi import dòng ${index + 1}: ${err.message}`);
+                                        } else {
+                                            importedCount++;
+                                        }
+                                    }
+                                );
+
+                            } catch (error) {
+                                errors.push(`Lỗi xử lý dòng ${index + 1}: ${error.message}`);
                             }
                         });
-                        
-                        console.log('Processed monthly payments:', monthlyPayments);
-                    }
+                    });
 
-                    // Insert vehicle - Import vehicles are always "exited" (isParking = false)
-                    db.run(`INSERT OR REPLACE INTO vehicles 
-                            (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, monthly_parking, monthly_payments, monthly_paid, payment_date) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-                        [
-                            licensePlate,
-                            vehicleType,
-                            ownerName,
-                            phone,
-                            new Date().toISOString(),
-                            new Date().toISOString(), // Set exit_date since isParking = false
-                            price,
-                            0, // isParking = false for imported vehicles
-                            isMonthly ? 1 : 0,
-                            isMonthly ? JSON.stringify(monthlyPayments) : null,
-                            isMonthly ? (Object.keys(monthlyPayments).length > 0 ? 1 : 0) : 0,
-                            isMonthly ? new Date().toISOString() : null
-                        ],
-                        function(err) {
-                            if (err) {
-                                errors.push(`Lỗi import dòng ${index + 1}: ${err.message}`);
-                            } else {
-                                importedCount++;
-                            }
-                        }
-                    );
+                    setTimeout(() => {
+                        res.json({
+                            message: `Import thành công ${importedCount} xe`,
+                            imported: importedCount,
+                            errors: errors
+                        });
+                    }, 1000);
 
                 } catch (error) {
-                    errors.push(`Lỗi xử lý dòng ${index + 1}: ${error.message}`);
+                    console.error('Import Excel error after clearing:', error);
+                    res.status(500).json({ error: 'Lỗi import file Excel: ' + error.message });
                 }
             });
         });
-
-        setTimeout(() => {
-            res.json({
-                message: `Import thành công ${importedCount} xe`,
-                imported: importedCount,
-                errors: errors
-            });
-        }, 1000);
 
     } catch (error) {
         console.error('Import Excel error:', error);
@@ -750,6 +785,53 @@ app.delete('/api/clear-all-data', (req, res) => {
     });
 });
 
+// Delete a specific vehicle
+app.delete('/api/vehicles/:id', (req, res) => {
+    const { id } = req.params;
+    
+    // First get vehicle info for logging
+    db.get('SELECT * FROM vehicles WHERE id = ?', [id], (err, vehicle) => {
+        if (err) {
+            console.error('Error getting vehicle for deletion:', err.message);
+            return res.status(500).json({ error: err.message });
+        }
+        
+        if (!vehicle) {
+            return res.status(404).json({ error: 'Vehicle not found' });
+        }
+        
+        // Delete from vehicles table
+        db.run('DELETE FROM vehicles WHERE id = ?', [id], function(err) {
+            if (err) {
+                console.error('Error deleting vehicle:', err.message);
+                return res.status(500).json({ error: err.message });
+            }
+            
+            if (this.changes === 0) {
+                return res.status(404).json({ error: 'Vehicle not found' });
+            }
+            
+            // Also delete from vehicle_history table for complete removal
+            db.run('DELETE FROM vehicle_history WHERE license_plate = ?', [vehicle.license_plate], (historyErr) => {
+                if (historyErr) {
+                    console.error('Error deleting from history:', historyErr.message);
+                    // Don't fail the main operation if history deletion fails
+                }
+                
+                console.log(`Vehicle deleted successfully: ${vehicle.license_plate} (ID: ${id})`);
+                res.json({ 
+                    message: `Đã xóa xe ${vehicle.license_plate} thành công!`,
+                    deletedVehicle: {
+                        id: vehicle.id,
+                        license_plate: vehicle.license_plate,
+                        owner_name: vehicle.owner_name
+                    }
+                });
+            });
+        });
+    });
+});
+
 // Update vehicle (mainly for exit)
 app.put('/api/vehicles/:id', (req, res) => {
     const { id } = req.params;
@@ -780,10 +862,6 @@ app.put('/api/vehicles/:id', (req, res) => {
         
         // Allow price updates for monthly parking vehicles always, restrict for hourly vehicles that have exited
         if (price !== undefined) {
-            if ((vehicle.isParking === false || vehicle.isParking === 0) && (isParking !== false && isParking !== 0) && exit_date === undefined && vehicle.monthly_parking !== 1) {
-                res.status(400).json({ error: 'Không thể sửa giá tiền cho xe gửi giờ đã ra bãi' });
-                return;
-            }
             updateFields.push('price = ?');
             updateParams.push(price);
         }
@@ -843,7 +921,16 @@ app.put('/api/vehicles/:id', (req, res) => {
         
         db.run(updateQuery, updateParams, function(err) {
             if (err) {
-                res.status(500).json({ error: err.message });
+                console.error('SQL Error in vehicle update:', err.message);
+                console.error('Update query:', updateQuery);
+                console.error('Update params:', updateParams);
+                
+                // Check for specific constraint violations
+                if (err.message.includes('UNIQUE constraint failed')) {
+                    res.status(400).json({ error: 'Biển số xe này đã tồn tại cho xe gửi tháng khác!' });
+                } else {
+                    res.status(500).json({ error: 'Lỗi cập nhật dữ liệu: ' + err.message });
+                }
                 return;
             }
             if (this.changes === 0) {
