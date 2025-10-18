@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Clear Cache</title>
+</head>
+<body>
+    <h2>🔄 Đang clear cache...</h2>
+    <p>Vui lòng đợi 3 giây...</p>
+    
+    <script>
+        // Force clear cache and reload
+        setTimeout(() => {
+            if ('caches' in window) {
+                caches.keys().then(names => {
+                    names.forEach(name => {
+                        caches.delete(name);
+                    });
+                });
+            }
+            
+            // Clear localStorage
+            localStorage.clear();
+            sessionStorage.clear();
+            
+            // Redirect to main page with cache-busting
+            window.location.href = '/?v=' + Date.now();
+        }, 3000);
+    </script>
+</body>
+</html>
