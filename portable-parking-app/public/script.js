@@ -181,7 +181,7 @@ function renderMonthlyVehicles(vehicles) {
         console.log('No monthly vehicles to display');
         monthlyVehicleTableBody.innerHTML = `
             <tr>
-                <td colspan="11" style="text-align: center; padding: 40px; color: #666;">
+                <td colspan="9" style="text-align: center; padding: 40px; color: #666;">
                     Chưa có xe gửi tháng nào
                 </td>
             </tr>
@@ -205,8 +205,7 @@ function renderMonthlyVehicles(vehicles) {
             <td>${vehicle.vehicle_type}</td>
             <td>${vehicle.owner_name}</td>
             <td>${vehicle.phone}</td>
-            <td>${formatDateTime(vehicle.entry_date)}</td>
-            <td>${vehicle.exit_date ? formatDateTime(vehicle.exit_date) : '-'}</td>
+            <td>${formatDate(vehicle.entry_date)}</td>
             <td>${formatCurrency(vehicle.price)}</td>
             <td>
                 <span class="payment-detail-link" onclick="viewPaymentDetails(${vehicle.id})">
@@ -214,18 +213,9 @@ function renderMonthlyVehicles(vehicles) {
                 </span>
             </td>
             <td>
-                <span class="status-badge ${vehicle.isParking ? 'status-in' : 'status-out'}">
-                    ${vehicle.isParking ? 'Trong bãi' : 'Đã ra'}
-                </span>
-            </td>
-            <td>
                 <div class="action-buttons">
                     <button class="btn btn-primary" onclick="editVehicle(${vehicle.id})">Sửa</button>
                     <button class="btn btn-success" onclick="showPaymentModal(${vehicle.id})" title="Thanh toán">💰</button>
-                    ${vehicle.isParking ? 
-                        `<button class="btn btn-danger" onclick="exitVehicle(${vehicle.id})">Xe ra</button>` : 
-                        `<button class="btn btn-secondary" onclick="reenterVehicle(${vehicle.id})">Vào lại</button>`
-                    }
                     <button class="btn btn-danger" onclick="deleteVehicle(${vehicle.id})" title="Xóa xe">🗑️</button>
                 </div>
             </td>
@@ -243,7 +233,7 @@ function renderHourlyVehicles(vehicles) {
     if (vehicles.length === 0) {
         hourlyVehicleTableBody.innerHTML = `
             <tr>
-                <td colspan="10" style="text-align: center; padding: 40px; color: #666;">
+                <td colspan="8" style="text-align: center; padding: 40px; color: #666;">
                     Chưa có xe gửi theo giờ nào
                 </td>
             </tr>
@@ -267,21 +257,11 @@ function renderHourlyVehicles(vehicles) {
             <td>${vehicle.vehicle_type}</td>
             <td>${vehicle.owner_name}</td>
             <td>${vehicle.phone}</td>
-            <td>${formatDateTime(vehicle.entry_date)}</td>
-            <td>${vehicle.exit_date ? formatDateTime(vehicle.exit_date) : '-'}</td>
+            <td>${formatDate(vehicle.entry_date)}</td>
             <td>${formatCurrency(vehicle.price)}</td>
-            <td>
-                <span class="status-badge ${vehicle.isParking ? 'status-in' : 'status-out'}">
-                    ${vehicle.isParking ? 'Trong bãi' : 'Đã ra'}
-                </span>
-            </td>
             <td>
                 <div class="action-buttons">
                     <button class="btn btn-primary" onclick="editVehicle(${vehicle.id})">Sửa</button>
-                    ${vehicle.isParking ? 
-                        `<button class="btn btn-success" onclick="exitVehicle(${vehicle.id})">Xe ra</button>` : 
-                        `<button class="btn btn-secondary" onclick="reenterVehicle(${vehicle.id})">Vào lại</button>`
-                    }
                     <button class="btn btn-danger" onclick="deleteVehicle(${vehicle.id})" title="Xóa xe">🗑️</button>
                 </div>
             </td>
@@ -849,6 +829,17 @@ function formatDateTime(dateString) {
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
+    });
+}
+
+// Helper function to format date only (dd/mm/yyyy)
+function formatDate(dateString) {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric'
     });
 }
 

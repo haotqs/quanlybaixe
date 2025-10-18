@@ -269,14 +269,14 @@ app.get('/api/export/all', (req, res) => {
                                 monthlySheet[moneyRef].v = monthData.amount || 0;
                                 monthlySheet[moneyRef].t = 'n';
                                 
-                                // Set payment date (convert to Excel date)
+                                // Set payment date (format as dd/mm/yyyy text)
                                 if (monthData.date) {
                                     const dateRef = xlsx.utils.encode_cell({ r: rowIndex, c: mapping.dateCol });
                                     if (!monthlySheet[dateRef]) monthlySheet[dateRef] = {};
                                     const jsDate = new Date(monthData.date);
-                                    const excelDate = (jsDate.getTime() / 86400000) + 25569; // Convert to Excel date
-                                    monthlySheet[dateRef].v = excelDate;
-                                    monthlySheet[dateRef].t = 'n';
+                                    const formattedDate = jsDate.toLocaleDateString('vi-VN');
+                                    monthlySheet[dateRef].v = formattedDate;
+                                    monthlySheet[dateRef].t = 's'; // Set as string, not number
                                 }
                             }
                         });
