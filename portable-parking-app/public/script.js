@@ -54,6 +54,7 @@ const editVehicleCancel = document.getElementById('editVehicleCancel');
 document.addEventListener('DOMContentLoaded', function() {
     loadVehicles();
     setupEventListeners();
+    setupDateInputFormatting();
 });
 
 // Event listeners
@@ -100,6 +101,44 @@ function setupEventListeners() {
             hideEditVehicleModal();
         }
     });
+}
+
+// Date input formatting and validation
+function setupDateInputFormatting() {
+    const editEntryDateInput = document.getElementById('editEntryDate');
+    if (editEntryDateInput) {
+        // Auto-format as user types
+        editEntryDateInput.addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, ''); // Remove non-digits
+            
+            if (value.length >= 2) {
+                value = value.substring(0, 2) + '/' + value.substring(2);
+            }
+            if (value.length >= 5) {
+                value = value.substring(0, 5) + '/' + value.substring(5, 9);
+            }
+            
+            e.target.value = value;
+        });
+        
+        // Validate on blur
+        editEntryDateInput.addEventListener('blur', function(e) {
+            const value = e.target.value.trim();
+            if (value && !value.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                e.target.style.borderColor = '#e74c3c';
+                e.target.title = 'Định dạng không hợp lệ. Vui lòng nhập theo định dạng dd/mm/yyyy';
+            } else {
+                e.target.style.borderColor = '';
+                e.target.title = '';
+            }
+        });
+        
+        // Clear error styling on focus
+        editEntryDateInput.addEventListener('focus', function(e) {
+            e.target.style.borderColor = '';
+            e.target.title = '';
+        });
+    }
 }
 
 // API functions
@@ -417,6 +456,20 @@ async function editVehicle(id) {
         priceField.value = vehicle.price || 0;
         monthlyParkingField.checked = vehicle.monthly_parking === 1;
         
+        // Fill entry date field (dd/mm/yyyy format)
+        const entryDateField = document.getElementById('editEntryDate');
+        if (entryDateField && vehicle.entry_date) {
+            // Convert to dd/mm/yyyy format for text input
+            const date = new Date(vehicle.entry_date);
+            // Ensure we get the correct date without timezone issues
+            const day = String(date.getDate()).padStart(2, '0');
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const year = date.getFullYear();
+            const dateStr = `${day}/${month}/${year}`;
+            entryDateField.value = dateStr;
+            console.log(`Filling edit date field: ${vehicle.entry_date} -> ${dateStr}`);
+        }
+        
         // Disable price field only for hourly vehicles that have exited
         if (!vehicle.isParking && vehicle.monthly_parking !== 1) {
             priceField.disabled = true;
@@ -461,6 +514,22 @@ async function handleEditVehicleSave() {
             price: parseFloat(document.getElementById('editPrice').value) || 0,
             monthly_parking: document.getElementById('editMonthlyParking').checked ? 1 : 0
         };
+        
+        // Include entry date if it has been changed (keep current time)
+        const entryDateField = document.getElementById('editEntryDate');
+        if (entryDateField && entryDateField.value) {
+            // Parse dd/mm/yyyy format and convert to YYYY-MM-DD for backend
+            const dateValue = entryDateField.value.trim();
+            const dateMatch = dateValue.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+            if (dateMatch) {
+                const [, day, month, year] = dateMatch;
+                vehicleData.entry_date = `${year}-${month}-${day}`;
+                console.log(`Converting date: ${dateValue} -> ${vehicleData.entry_date}`);
+            } else {
+                showMessage('Định dạng ngày không hợp lệ! Vui lòng nhập theo định dạng dd/mm/yyyy', 'error');
+                return;
+            }
+        }
         
         // Validate required fields (phone is optional)
         if (!vehicleData.license_plate || !vehicleData.owner_name) {
@@ -812,11 +881,15 @@ function viewPaymentDetails(vehicleId) {
     viewPaymentModal.style.display = 'block';
 }
 
-// Helper function to format date
+// Helper function to format date only (dd/mm/yyyy)
 function formatDate(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN');
+    return date.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric'
+    });
 }
 
 // Helper function to format date and time
@@ -829,17 +902,6 @@ function formatDateTime(dateString) {
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
-    });
-}
-
-// Helper function to format date only (dd/mm/yyyy)
-function formatDate(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit', 
-        year: 'numeric'
     });
 }
 

@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Date Format Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .test-result { margin: 10px 0; padding: 10px; background: #f0f0f0; border-radius: 3px; }
+        input[type="date"] { padding: 8px; margin: 10px 0; }
+        input[type="text"] { padding: 8px; margin: 10px 0; }
+        button { padding: 8px 15px; margin: 5px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Date Format Test - Parking Management</h1>
+    
+    <div class="test-section">
+        <h3>Test 1: Date Input Field</h3>
+        <label for="testDate">Date Input (Text dd/mm/yyyy):</label>
+        <input type="text" id="testDate" value="15/01/2024" placeholder="dd/mm/yyyy" pattern="\d{2}/\d{2}/\d{4}">
+        <button onclick="testDateInput()">Test Date Input</button>
+        <div id="dateInputResult" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 2: Date Parsing from Different Formats</h3>
+        <button onclick="testDateParsing()">Test Date Parsing</button>
+        <div id="dateParsingResult" class="test-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>Test 3: Date Display Formatting</h3>
+        <button onclick="testDateFormatting()">Test Date Formatting</button>
+        <div id="dateFormattingResult" class="test-result"></div>
+    </div>
+
+    <script>
+        // Helper function to format date only (dd/mm/yyyy) - copied from parking app
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const date = new Date(dateString);
+            return date.toLocaleDateString('vi-VN', {
+                day: '2-digit',
+                month: '2-digit', 
+                year: 'numeric'
+            });
+        }
+        
+        function testDateInput() {
+            const dateInput = document.getElementById('testDate');
+            const result = document.getElementById('dateInputResult');
+            
+            const inputValue = dateInput.value;
+            const dateObj = new Date(inputValue);
+            const formattedDisplay = formatDate(inputValue);
+            
+            result.innerHTML = `
+                <strong>Input Value:</strong> ${inputValue}<br>
+                <strong>Date Object:</strong> ${dateObj.toString()}<br>
+                <strong>Formatted Display (dd/mm/yyyy):</strong> ${formattedDisplay}<br>
+                <strong>ISO String:</strong> ${dateObj.toISOString()}<br>
+                <strong>Browser Locale Display:</strong> ${dateObj.toLocaleDateString()}
+            `;
+        }
+        
+        function testDateParsing() {
+            const result = document.getElementById('dateParsingResult');
+            const testDates = [
+                '2024-01-15',           // ISO format
+                '15/01/2024',           // dd/mm/yyyy
+                '01/15/2024',           // mm/dd/yyyy (US format)
+                '2024-01-15T07:00:00.000Z', // Full ISO with time
+                'January 15, 2024'      // Text format
+            ];
+            
+            let output = '<h4>Testing different date formats:</h4>';
+            
+            testDates.forEach(dateStr => {
+                const dateObj = new Date(dateStr);
+                const isValid = !isNaN(dateObj.getTime());
+                const formatted = isValid ? formatDate(dateObj) : 'Invalid Date';
+                
+                output += `
+                    <div style="margin: 5px 0; padding: 5px; background: ${isValid ? '#e8f5e8' : '#ffe8e8'};">
+                        <strong>Input:</strong> "${dateStr}" → 
+                        <strong>Parsed:</strong> ${isValid ? dateObj.toISOString().split('T')[0] : 'INVALID'} → 
+                        <strong>Display:</strong> ${formatted}
+                    </div>
+                `;
+            });
+            
+            result.innerHTML = output;
+        }
+        
+        function testDateFormatting() {
+            const result = document.getElementById('dateFormattingResult');
+            const testDate = new Date('2024-01-15T07:00:00.000Z');
+            
+            const formats = {
+                'formatDate() function': formatDate(testDate),
+                'toLocaleDateString()': testDate.toLocaleDateString(),
+                'toLocaleDateString("vi-VN")': testDate.toLocaleDateString('vi-VN'),
+                'toLocaleDateString("en-US")': testDate.toLocaleDateString('en-US'),
+                'ISO Date (YYYY-MM-DD)': testDate.toISOString().split('T')[0],
+                'toString()': testDate.toString(),
+                'toDateString()': testDate.toDateString()
+            };
+            
+            let output = '<h4>Different formatting methods for: 2024-01-15T07:00:00.000Z</h4>';
+            
+            Object.entries(formats).forEach(([method, formatted]) => {
+                output += `
+                    <div style="margin: 5px 0; padding: 5px; background: #f0f8ff;">
+                        <strong>${method}:</strong> ${formatted}
+                    </div>
+                `;
+            });
+            
+            result.innerHTML = output;
+        }
+        
+        // Run initial tests
+        window.onload = function() {
+            testDateInput();
+            testDateParsing();
+            testDateFormatting();
+        };
+    </script>
+</body>
+</html>

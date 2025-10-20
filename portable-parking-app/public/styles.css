@@ -733,3 +733,30 @@ tbody tr:nth-child(even) {
         gap: 3px;
     }
 }
+
+/* Date input styling */
+input[name="entry_date"] {
+    font-family: 'Courier New', monospace;
+    letter-spacing: 1px;
+    text-align: center;
+    background: linear-gradient(to right, #fff 0%, #f8f9ff 100%);
+    border: 2px solid #e3f2fd;
+}
+
+input[name="entry_date"]:focus {
+    border-color: #2196f3;
+    box-shadow: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}
+
+input[name="entry_date"]::placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+.help-text {
+    display: block;
+    font-size: 12px;
+    color: #666;
+    margin-top: 5px;
+    font-style: italic;
+}

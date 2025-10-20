@@ -327,7 +327,7 @@ app.get('/api/export/all', (req, res) => {
                             vehicle.license_plate || '', // BIỂN SỐ XE (B)
                             `${vehicle.owner_name || ''}${vehicle.phone ? '/' + vehicle.phone : ''}`, // TÊN/SĐT (C) 
                             `${vehicle.vehicle_type || ''}${vehicle.price ? '/' + vehicle.price + 'k' : ''}`, // LOẠI XE/GIÁ (D)
-                            vehicle.entry_date ? new Date(vehicle.entry_date).toLocaleString('vi-VN') : '', // GIỜ VÀO (E)
+                            vehicle.entry_date ? new Date(vehicle.entry_date).toLocaleDateString('vi-VN') : '', // NGÀY VÀO (E)
                             (vehicle.exit_date && !vehicle.isParking) ? new Date(vehicle.exit_date).toLocaleString('vi-VN') : '', // GIỜ RA (F)
                             vehicle.price || 0, // TIỀN (G)
                             '' // GHI CHÚ (H) - empty for now
@@ -545,7 +545,8 @@ app.post('/api/import-excel', (req, res) => {
                                 let licensePlate = String(row['__EMPTY'] || row['SỐ XE'] || '').trim();
                                 const ownerNamePhone = String(row['__EMPTY_1'] || row['TÊN\nSỐ ĐT'] || '').trim();
                                 const vehicleTypePrice = String(row['__EMPTY_2'] || row['LOẠI XE\nGIÁ GỬI'] || '').trim();
-                                const entryDate = row['__EMPTY_3'] || row['NGÀY GỬI'] || new Date().toISOString();
+                                const entryDate = row['__EMPTY_3'] !== undefined ? row['__EMPTY_3'] : 
+                                                 (row['NGÀY GỬI'] !== undefined ? row['NGÀY GỬI'] : null);
                                 const paymentInfo = String(row['__EMPTY_4'] || row['THANH TOÁN'] || '').trim();
                                 const notes = String(row['__EMPTY_20'] || row['GHI CHÚ'] || '').trim();
                                 
@@ -554,6 +555,9 @@ app.post('/api/import-excel', (req, res) => {
                                     ownerNamePhone,
                                     vehicleTypePrice,
                                     entryDate,
+                                    entryDateType: typeof entryDate,
+                                    rawEmpty3: row['__EMPTY_3'],
+                                    rawNgayGui: row['NGÀY GỬI'],
                                     paymentInfo
                                 });
                                 
@@ -652,6 +656,65 @@ app.post('/api/import-excel', (req, res) => {
                                     console.log('Processed monthly payments:', monthlyPayments);
                                 }
 
+                                // Process entry date from Excel
+                                let processedEntryDate;
+                                if (entryDate !== null && entryDate !== undefined && typeof entryDate === 'number') {
+                                    // Excel date format - convert Excel serial number to JavaScript date
+                                    console.log(`Original Excel date value: ${entryDate} (type: ${typeof entryDate})`);
+                                    
+                                    // FIXED: Direct calculation to avoid timezone issues completely
+                                    // Excel serial date: days since December 31, 1899 (Excel day 1 = January 1, 1900)
+                                    // Formula: Add days to base date and extract components directly
+                                    const baseYear = 1900;
+                                    const baseMonth = 1; // January
+                                    const baseDay = 1;
+                                    
+                                    // Create base date in UTC to avoid timezone shifts
+                                    let baseDate = new Date(Date.UTC(baseYear, baseMonth - 1, baseDay));
+                                    
+                                    // Add the Excel serial days (subtract 1 because Excel day 1 is our base date)
+                                    let targetTimestamp = baseDate.getTime() + (entryDate - 1) * 24 * 60 * 60 * 1000;
+                                    let targetDate = new Date(targetTimestamp);
+                                    
+                                    // Extract date components using UTC methods to avoid local timezone
+                                    const year = targetDate.getUTCFullYear();
+                                    const month = String(targetDate.getUTCMonth() + 1).padStart(2, '0');
+                                    const day = String(targetDate.getUTCDate()).padStart(2, '0');
+                                    processedEntryDate = `${year}-${month}-${day} 07:00:00`;
+                                    
+                                    console.log(`Excel date conversion (UTC): ${entryDate} -> ${day}/${month}/${year} -> ${processedEntryDate}`);
+                                    console.log(`Debug: baseDate=${baseDate.toISOString()}, targetDate=${targetDate.toISOString()}`);
+                                } else if (entryDate !== null && entryDate !== undefined && typeof entryDate === 'string' && entryDate.trim() !== '') {
+                                    // String date format - could be DD/MM/YYYY or other formats
+                                    let jsDate;
+                                    const dateStr = entryDate.trim();
+                                    console.log(`Processing string date: "${dateStr}"`);
+                                    
+                                    // Check if it's in DD/MM/YYYY format
+                                    if (dateStr.match(/^\d{1,2}\/\d{1,2}\/\d{4}$/)) {
+                                        const [day, month, year] = dateStr.split('/');
+                                        jsDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                                        console.log(`Parsed DD/MM/YYYY format: ${dateStr} -> ${jsDate.toLocaleDateString('vi-VN')}`);
+                                    } else {
+                                        // Try standard JavaScript date parsing
+                                        jsDate = new Date(dateStr);
+                                        console.log(`Standard parsing: ${dateStr} -> ${jsDate.toLocaleDateString('vi-VN')}`);
+                                    }
+                                    
+                                    if (isNaN(jsDate.getTime())) {
+                                        // Invalid date, use current date
+                                        jsDate = new Date();
+                                        console.log(`Invalid date, using current date: ${jsDate.toLocaleDateString('vi-VN')}`);
+                                    }
+                                    
+                                    processedEntryDate = jsDate.toISOString().split('T')[0] + ' 07:00:00';
+                                    console.log(`String date final result: ${dateStr} -> ${processedEntryDate}`);
+                                } else {
+                                    // Fallback to current date
+                                    processedEntryDate = new Date().toISOString().split('T')[0] + ' 07:00:00';
+                                    console.log(`Using current date as fallback (entryDate was: ${entryDate}): ${processedEntryDate}`);
+                                }
+
                                 // Insert vehicle - Import vehicles are always "exited" (isParking = false)
                                 db.run(`INSERT OR REPLACE INTO vehicles 
                                         (license_plate, vehicle_type, owner_name, phone, entry_date, exit_date, price, isParking, monthly_parking, monthly_payments, monthly_paid, payment_date) 
@@ -661,7 +724,7 @@ app.post('/api/import-excel', (req, res) => {
                                         vehicleType,
                                         ownerName,
                                         phone,
-                                        new Date().toISOString(),
+                                        processedEntryDate,
                                         new Date().toISOString(), // Set exit_date since isParking = false
                                         price,
                                         0, // isParking = false for imported vehicles
@@ -846,7 +909,7 @@ app.delete('/api/vehicles/:id', (req, res) => {
 // Update vehicle (mainly for exit)
 app.put('/api/vehicles/:id', (req, res) => {
     const { id } = req.params;
-    const { exit_date, price, isParking, monthly_parking, license_plate, vehicle_type, owner_name, phone, monthly_paid, payment_date, monthly_payments } = req.body;
+    const { exit_date, price, isParking, monthly_parking, license_plate, vehicle_type, owner_name, phone, monthly_paid, payment_date, monthly_payments, entry_date } = req.body;
     
     // First, get vehicle info to check current status and type
     db.get('SELECT isParking, monthly_parking FROM vehicles WHERE id = ?', [id], (err, vehicle) => {
@@ -920,6 +983,13 @@ app.put('/api/vehicles/:id', (req, res) => {
         if (monthly_payments !== undefined) {
             updateFields.push('monthly_payments = ?');
             updateParams.push(monthly_payments);
+        }
+        
+        if (entry_date !== undefined) {
+            updateFields.push('entry_date = ?');
+            // Only store the date part (YYYY-MM-DD) with default time 07:00:00
+            const dateOnly = new Date(entry_date).toISOString().split('T')[0] + ' 07:00:00';
+            updateParams.push(dateOnly);
         }
         
         if (updateFields.length === 0) {

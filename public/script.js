@@ -425,6 +425,20 @@ async function editVehicle(id) {
         priceField.value = vehicle.price || 0;
         monthlyParkingField.checked = vehicle.monthly_parking === 1;
         
+        // Fill entry date field (date only)
+        const entryDateField = document.getElementById('editEntryDate');
+        if (entryDateField && vehicle.entry_date) {
+            // Convert to YYYY-MM-DD format for input[type="date"]
+            const date = new Date(vehicle.entry_date);
+            // Ensure we get the correct date without timezone issues
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const dateStr = `${year}-${month}-${day}`;
+            entryDateField.value = dateStr;
+            console.log(`Filling edit date field: ${vehicle.entry_date} -> ${dateStr}`);
+        }
+        
         // Disable price field only for hourly vehicles that have exited
         if (!vehicle.isParking && vehicle.monthly_parking !== 1) {
             priceField.disabled = true;
@@ -594,6 +608,13 @@ async function handleEditVehicleSave() {
             price: parseFloat(document.getElementById('editPrice').value) || 0,
             monthly_parking: document.getElementById('editMonthlyParking').checked ? 1 : 0
         };
+        
+        // Include entry date if it has been changed (keep current time)
+        const entryDateField = document.getElementById('editEntryDate');
+        if (entryDateField && entryDateField.value) {
+            // Only send the date (YYYY-MM-DD), backend will handle time formatting
+            vehicleData.entry_date = entryDateField.value;
+        }
         
         // Validate required fields (phone is optional)
         if (!vehicleData.license_plate || !vehicleData.owner_name) {
@@ -819,11 +840,15 @@ function viewPaymentDetails(vehicleId) {
     viewPaymentModal.style.display = 'block';
 }
 
-// Helper function to format date
+// Helper function to format date only (dd/mm/yyyy)
 function formatDate(dateString) {
     if (!dateString) return '';
     const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN');
+    return date.toLocaleDateString('vi-VN', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: 'numeric'
+    });
 }
 
 // Helper function to format date and time
@@ -836,17 +861,6 @@ function formatDateTime(dateString) {
         year: 'numeric',
         hour: '2-digit',
         minute: '2-digit'
-    });
-}
-
-// Helper function to format date only (dd/mm/yyyy)
-function formatDate(dateString) {
-    if (!dateString) return '';
-    const date = new Date(dateString);
-    return date.toLocaleDateString('vi-VN', {
-        day: '2-digit',
-        month: '2-digit', 
-        year: 'numeric'
     });
 }
 
